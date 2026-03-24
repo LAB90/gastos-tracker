@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GastosTracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B0E11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GastosTracker">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0E11;
+    --surface: #12161C;
+    --surface2: #181D25;
+    --border: rgba(255,255,255,0.06);
+    --text: #E8ECF1;
+    --text2: rgba(255,255,255,0.5);
+    --text3: rgba(255,255,255,0.3);
+    --accent: #00E5B0;
+    --accent2: #00C49A;
+    --red: #FF5C5C;
+    --blue: #5B8DEF;
+    --purple: #A37EF5;
+    --yellow: #F5C542;
+    --pink: #F06292;
+    --orange: #FF8A50;
+    --radius: 12px;
+    --font: 'Outfit', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orb */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,229,176,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app { position: relative; z-index: 1; }
+
+  /* ─── SETUP SCREEN ─── */
+  .setup-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .setup-logo {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    box-shadow: 0 8px 40px rgba(0,229,176,0.25);
+    margin-bottom: 28px;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  .setup-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .setup-sub {
+    font-size: 15px;
+    color: var(--text2);
+    max-width: 420px;
+    line-height: 1.6;
+    margin-bottom: 36px;
+  }
+
+  .setup-steps {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    text-align: left;
+    max-width: 520px;
+    width: 100%;
+    margin-bottom: 28px;
+  }
+
+  .setup-step {
+    display: flex;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  .setup-step:last-child { border-bottom: none; }
+
+  .step-num {
+    width: 24px; height: 24px;
+    background: rgba(0,229,176,0.12);
+    color: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .setup-step a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .setup-step code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--yellow);
+  }
+
+  .client-id-input {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .client-id-input input {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .client-id-input input:focus {
+    border-color: var(--accent);
+  }
+
+  .btn {
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: var(--bg);
+    box-shadow: 0 4px 20px rgba(0,229,176,0.25);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 6px 28px rgba(0,229,176,0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-ghost {
+    background: rgba(255,255,255,0.04);
+    color: var(--text2);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { background: rgba(255,255,255,0.08); }
+
+  /* ─── HEADER ─── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(11,14,17,0.8);
+    backdrop-filter: blur(20px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 12px rgba(0,229,176,0.2);
+  }
+
+  .header-title { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; }
+  .header-sub { font-size: 10px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .nav {
+    display: flex;
+    gap: 3px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    padding: 3px;
+  }
+
+  .nav-btn {
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .nav-btn.active {
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .nav-btn .badge {
+    position: absolute;
+    top: 2px; right: 4px;
+    background: var(--red);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 8px;
+    padding: 1px 5px;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .nav-btn.active .badge { background: var(--bg); color: var(--accent); }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .scan-btn {
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg);
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .scan-btn:hover { box-shadow: 0 2px 16px rgba(0,229,176,0.3); }
+  .scan-btn:disabled { opacity: 0.5; cursor: wait; }
+  .scan-btn .spinner { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── CONTENT ─── */
+  .content { padding: 24px 28px; max-width: 1100px; margin: 0 auto; }
+
+  /* ─── STAT CARDS ─── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: rgba(255,255,255,0.1); }
+  .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .stat-value { font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  /* ─── CATEGORY BAR ─── */
+  .cat-bar-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 22px;
+  }
+
+  .cat-bar-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 14px; }
+
+  .cat-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    gap: 2px;
+    margin-bottom: 14px;
+  }
+
+  .cat-bar-seg { border-radius: 2px; min-width: 4px; transition: width 0.5s ease; }
+
+  .cat-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+  .cat-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .cat-dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .cat-legend-amount { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text); }
+
+  /* ─── CHART ─── */
+  .chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 22px;
+  }
+
+  .chart-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 14px; }
+
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 110px;
+  }
+
+  .chart-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .chart-amount { font-family: var(--mono); font-size: 9px; color: var(--accent); }
+
+  .chart-bar-outer {
+    width: 100%;
+    max-width: 40px;
+    border-radius: 4px;
+    transition: height 0.5s ease;
+  }
+
+  .chart-day { font-size: 11px; color: var(--text3); text-transform: capitalize; }
+
+  /* ─── TRANSACTIONS ─── */
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+
+  .filter-pill {
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .filter-pill:hover { background: rgba(255,255,255,0.06); }
+  .filter-pill.active { background: var(--accent); color: var(--bg); font-weight: 600; border-color: transparent; }
+  .filter-pill .count { font-size: 10px; opacity: 0.7; font-weight: 700; }
+
+  .tx-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 14px;
+    transition: background 0.15s;
+  }
+
+  .tx-row:hover { background: rgba(255,255,255,0.01); margin: 0 -8px; padding: 14px 8px; border-radius: 8px; }
+
+  .tx-icon {
+    width: 42px; height: 42px;
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .tx-info { flex: 1; min-width: 0; }
+  .tx-desc { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-meta { font-size: 11px; color: var(--text3); display: flex; gap: 8px; margin-top: 2px; }
+
+  .tx-type {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .tx-amount {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--red);
+    flex-shrink: 0;
+  }
+
+  .tx-cat-btn {
+    font-family: var(--font);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(0,229,176,0.08);
+    border: 1px solid rgba(0,229,176,0.15);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .tx-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .tx-recat-btn {
+    font-family: var(--font);
+    font-size: 11px;
+    color: var(--blue);
+    background: rgba(91,141,239,0.08);
+    border: 1px solid rgba(91,141,239,0.15);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .tx-del-btn {
+    font-family: var(--font);
+    font-size: 11px;
+    color: var(--red);
+    background: rgba(255,92,92,0.08);
+    border: 1px solid rgba(255,92,92,0.15);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+
+  .tx-del-btn:hover { background: rgba(255,92,92,0.18); }
+  .tx-recat-btn:hover { background: rgba(91,141,239,0.18); }
+
+  .recat-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .recat-option {
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .recat-option:hover { background: rgba(255,255,255,0.06); }
+
+  /* ─── CATEGORIZE ─── */
+  .categorize-wrap { max-width: 520px; margin: 0 auto; padding-top: 12px; }
+  .categorize-count { font-size: 13px; color: var(--text3); text-align: center; margin-bottom: 20px; }
+
+  .categorize-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 28px;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .categorize-amount {
+    font-family: var(--mono);
+    font-size: 38px;
+    font-weight: 700;
+    color: var(--red);
+    margin-bottom: 8px;
+  }
+
+  .categorize-desc { font-size: 17px; font-weight: 500; margin-bottom: 6px; }
+  .categorize-meta { font-size: 12px; color: var(--text3); }
+
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .cat-btn {
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    border-radius: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s;
+    border-width: 1px;
+    border-style: solid;
+  }
+
+  .cat-btn:hover { transform: scale(1.02); }
+  .cat-btn span { font-size: 20px; }
+
+  .cat-nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 20px;
+    align-items: center;
+  }
+
+  .cat-nav button {
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--text2);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+
+  .cat-nav button:disabled { opacity: 0.3; cursor: default; }
+  .cat-nav .pos { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+
+  /* ─── EMPTY STATE ─── */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text3);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-title { font-size: 18px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+
+  /* ─── STATUS BAR ─── */
+  .status-bar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text2);
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  }
+
+  /* ─── MANUAL ENTRY ─── */
+  .manual-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 22px;
+  }
+
+  .manual-title { font-size: 14px; font-weight: 600; color: var(--text2); margin-bottom: 14px; }
+
+  .manual-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .manual-row input, .manual-row select {
+    font-family: var(--font);
+    font-size: 13px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 14px;
+    outline: none;
+  }
+
+  .manual-row input:focus, .manual-row select:focus { border-color: var(--accent); }
+  .manual-row input[type="number"] { width: 120px; font-family: var(--mono); }
+  .manual-row input[type="text"] { flex: 1; min-width: 150px; }
+  .manual-row select { min-width: 140px; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 700px) {
+    .header { flex-wrap: wrap; gap: 12px; padding: 14px 16px; }
+    .nav { order: 3; width: 100%; justify-content: center; }
+    .content { padding: 18px 16px; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .stat-value { font-size: 20px; }
+    .cat-grid { grid-template-columns: 1fr; }
+    .categorize-amount { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// GASTOS TRACKER — Pichincha & Produbanco
+// ═══════════════════════════════════════════════════════════
+
+let CATEGORIES = [
+  { id: "food", label: "Alimentación", icon: "🛒", color: "#E8590C" },
+  { id: "restaurants", label: "Restaurantes", icon: "🍽️", color: "#D4437B" },
+  { id: "transport", label: "Transporte", icon: "🚗", color: "#5B8DEF" },
+  { id: "entertainment", label: "Entretenimiento", icon: "🎮", color: "#A37EF5" },
+  { id: "health", label: "Salud", icon: "💊", color: "#20C997" },
+  { id: "shopping", label: "Compras", icon: "🛍️", color: "#F06292" },
+  { id: "services", label: "Servicios", icon: "⚡", color: "#F5C542" },
+  { id: "education", label: "Educación", icon: "📚", color: "#5B8DEF" },
+  { id: "home", label: "Hogar", icon: "🏠", color: "#51CF66" },
+  { id: "pets", label: "Perros", icon: "🐕", color: "#8B5E3C" },
+  { id: "kids", label: "Hijos", icon: "👶", color: "#4DABF7" },
+  { id: "subscriptions", label: "Suscripciones", icon: "🔄", color: "#FF5C5C" },
+  { id: "investigate", label: "Investigar", icon: "🔍", color: "#CE8E2E" },
+  { id: "other", label: "Otro", icon: "📌", color: "#868E96" },
+];
+
+// Load custom categories from localStorage
+const customCats = JSON.parse(localStorage.getItem('gt_customCategories') || '[]');
+customCats.forEach(cc => {
+  if (!CATEGORIES.find(c => c.id === cc.id)) {
+    CATEGORIES.splice(CATEGORIES.length - 1, 0, cc);
+  }
+});
+
+const EMOJI_OPTIONS = ['📎','💼','🎁','🏋️','✈️','🎵','🔧','🍺','💇','🚌','🏥','📱','🎂','🧹','💡','🛠️','🎓','🏖️','🚿','🧾'];
+
+const AUTO_RULES = {
+  "uber": "transport", "cabify": "transport", "gasolinera": "transport", "combustible": "transport",
+  "indriver": "transport", "taxi": "transport", "peaje": "transport",
+  "netflix": "subscriptions", "spotify": "subscriptions", "disney": "subscriptions",
+  "amazon prime": "subscriptions", "youtube": "subscriptions", "apple": "subscriptions",
+  "hbo": "subscriptions", "paramount": "subscriptions",
+  "farmacia": "health", "hospital": "health", "clínica": "health", "medic": "health",
+  "fybeca": "health", "sana sana": "health", "pharmacy": "health",
+  "supermaxi": "food", "megamaxi": "food", "coral": "food", "mi comisariato": "food",
+  "tropi": "food", "tía": "food", "aki": "food",
+  "restaurante": "restaurants", "mcdonalds": "restaurants", "mcdonald": "restaurants", "burger": "restaurants",
+  "kfc": "restaurants", "pizza": "restaurants", "cafe": "restaurants", "starbucks": "restaurants", "coffee": "restaurants",
+  "juan valdez": "restaurants", "sweet & coffee": "restaurants", "menestras": "restaurants", "pollo": "restaurants",
+  "uber eats": "restaurants", "rappi": "restaurants", "pedidosya": "restaurants",
+  "veterinar": "pets", "mascota": "pets", "petshop": "pets", "pet shop": "pets",
+  "electrica": "services", "agua potable": "services", "telefon": "services",
+  "claro": "services", "movistar": "services", "cnt": "services", "internet": "services",
+  "cine": "entertainment", "cinemark": "entertainment", "multicines": "entertainment",
+  "steam": "entertainment", "playstation": "entertainment", "nintendo": "entertainment",
+  "xbox": "entertainment", "epic games": "entertainment",
+  "zara": "shopping", "marathon": "shopping", "etafashion": "shopping",
+  "de prati": "shopping", "ri store": "shopping", "mall": "shopping",
+};
+
+// ─── STATE ───────────────────────────────────────────
+let state = {
+  view: 'setup',        // setup | dashboard | transactions | categorize
+  clientId: localStorage.getItem('gt_clientId') || '',
+  accessToken: null,
+  transactions: JSON.parse(localStorage.getItem('gt_transactions') || '[]'),
+  learnedRules: JSON.parse(localStorage.getItem('gt_learnedRules') || '{}'),
+  scanning: false,
+  status: null,
+  filter: 'all',
+  catIndex: 0,
+};
+
+// Check if we have a valid token
+if (localStorage.getItem('gt_clientId')) {
+  state.view = 'dashboard';
+}
+
+function setState(updates) {
+  Object.assign(state, updates);
+  if (updates.transactions !== undefined) localStorage.setItem('gt_transactions', JSON.stringify(state.transactions));
+  if (updates.learnedRules !== undefined) localStorage.setItem('gt_learnedRules', JSON.stringify(state.learnedRules));
+  render();
+}
+
+// ─── AUTO CATEGORIZE ─────────────────────────────────
+function autoCategory(desc) {
+  const lower = desc.toLowerCase();
+  // Check learned rules first
+  if (state.learnedRules[lower]) return state.learnedRules[lower];
+  for (const [kw, cat] of Object.entries(AUTO_RULES)) {
+    if (lower.includes(kw)) return cat;
+  }
+  return null;
+}
+
+// ─── GMAIL API ───────────────────────────────────────
+function initGoogleAuth() {
+  const clientId = state.clientId.trim();
+  if (!clientId) return;
+  localStorage.setItem('gt_clientId', clientId);
+
+  // Use Google Identity Services (GIS) for OAuth
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+    callback: (response) => {
+      if (response.access_token) {
+        state.accessToken = response.access_token;
+        setState({ view: 'dashboard', status: '✅ Conectado a Gmail' });
+        setTimeout(() => setState({ status: null }), 3000);
+      }
+    },
+  });
+
+  tokenClient.requestAccessToken();
+}
+
+async function scanGmail() {
+  if (!state.accessToken) {
+    initGoogleAuth();
+    return;
+  }
+
+  setState({ scanning: true, status: 'Buscando correos bancarios...' });
+
+  try {
+    const existingKeys = new Set(state.transactions.map(t => t.emailId));
+    const newTxs = [];
+
+    // Helper to fetch and process messages
+    async function fetchAndProcess(query, queryType, maxResults) {
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 50}`,
+        { headers: { Authorization: `Bearer ${state.accessToken}` } }
+      );
+      if (res.status === 401) { state.accessToken = null; initGoogleAuth(); return; }
+      const data = await res.json();
+      if (!data.messages) return;
+      for (const m of data.messages) {
+        if (existingKeys.has(m.id)) continue;
+        try {
+          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${state.accessToken}` } });
+          const msg = await msgRes.json();
+          const headers = msg.payload?.headers || [];
+          const subject = headers.find(h => h.name === 'Subject')?.value || '';
+          const dateStr = headers.find(h => h.name === 'Date')?.value || '';
+          const msgDate = dateStr ? new Date(dateStr).toISOString() : new Date(parseInt(msg.internalDate)).toISOString();
+          let body = '';
+          (function exBody(part) { if (part.body?.data) body += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')) + '\n'; if (part.parts) part.parts.forEach(exBody); })(msg.payload);
+          const tx = parseTransaction(body, subject, msgDate, m.id, msg.threadId, queryType);
+          if (tx) newTxs.push(tx);
+        } catch (e) { /* skip */ }
+      }
+    }
+
+    // Helper for metadata-filtered search (for banco@pichincha.com)
+    async function fetchWithMetaFilter(query, subjectFilter, queryType, maxResults) {
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 200}`,
+        { headers: { Authorization: `Bearer ${state.accessToken}` } }
+      );
+      const data = await res.json();
+      if (!data.messages) return;
+      for (const m of data.messages) {
+        if (existingKeys.has(m.id)) continue;
+        try {
+          const metaRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject`, { headers: { Authorization: `Bearer ${state.accessToken}` } });
+          const meta = await metaRes.json();
+          const subject = meta.payload?.headers?.[0]?.value || '';
+          if (!subject.includes(subjectFilter)) continue;
+          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, { headers: { Authorization: `Bearer ${state.accessToken}` } });
+          const msg = await msgRes.json();
+          const dateStr = (msg.payload?.headers || []).find(h => h.name === 'Date')?.value || '';
+          const msgDate = dateStr ? new Date(dateStr).toISOString() : new Date(parseInt(msg.internalDate)).toISOString();
+          let body = '';
+          (function exBody(part) { if (part.body?.data) body += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')) + '\n'; if (part.parts) part.parts.forEach(exBody); })(msg.payload);
+          const tx = parseTransaction(body, subject, msgDate, m.id, msg.threadId, queryType);
+          if (tx) newTxs.push(tx);
+        } catch (e) { /* skip */ }
+      }
+    }
+
+    // ─── PICHINCHA: CONSUMOS ───
+    setState({ status: 'Buscando consumos Pichincha...' });
+    await fetchAndProcess('from:servicios@tarjetasbancopichincha.com subject:"Notificación de Consumos" newer_than:30d', 'consumo_pichincha');
+
+    // ─── PICHINCHA: TRANSFERENCIAS ───
+    setState({ status: `${newTxs.length} gastos. Transferencias Pichincha...` });
+    await fetchWithMetaFilter('from:banco@pichincha.com newer_than:30d', 'TRANSFERENCIA BANCA ELECTRONICA', 'transferencia_pichincha');
+
+    // ─── PRODUBANCO: CONSUMOS ───
+    setState({ status: `${newTxs.length} gastos. Consumos Produbanco...` });
+    await fetchAndProcess('from:bancaenlinea@produbanco.com subject:"Consumo Tarjeta de Crédito" newer_than:30d', 'consumo_produbanco');
+
+    // ─── PRODUBANCO: TRANSFERENCIAS ───
+    setState({ status: `${newTxs.length} gastos. Transferencias Produbanco...` });
+    await fetchAndProcess('from:bancaenlinea@produbanco.com subject:"Transferencia Ingresada" newer_than:30d', 'transferencia_produbanco');
+
+    if (newTxs.length > 0) {
+      const updated = [...newTxs, ...state.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+      setState({
+        transactions: updated,
+        scanning: false,
+        status: `✅ ${newTxs.length} nueva(s) transacción(es) registrada(s)`,
+      });
+    } else {
+      setState({ scanning: false, status: 'No se encontraron nuevas transacciones' });
+    }
+
+    setTimeout(() => setState({ status: null }), 4000);
+
+  } catch (e) {
+    console.error('Scan error:', e);
+    setState({ scanning: false, status: '⚠️ Error al escanear. Intenta reconectar Gmail.' });
+    setTimeout(() => setState({ status: null }), 4000);
+  }
+}
+
+// ─── HTML TO TEXT ─────────────────────────────────────
+function htmlToText(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  // Remove style and script tags
+  doc.querySelectorAll('style, script, head').forEach(el => el.remove());
+  // Get text, preserving some structure
+  return doc.body ? doc.body.innerText : html;
+}
+
+function parseTransaction(body, subject, date, emailId, threadId, queryType) {
+  // Convert HTML to plain text if needed
+  const rawText = body.includes('<html') || body.includes('<HTML') || body.includes('<!DOCTYPE')
+    ? htmlToText(body)
+    : body;
+  const text = rawText.replace(/\s+/g, ' ');
+  let amount = null;
+  let description = '';
+  let card = '';
+  let type = queryType || 'consumo';
+  let txDate = date;
+
+  // ─── PICHINCHA: CONSUMO ───
+  if (queryType === 'consumo_pichincha') {
+    const amtMatch = text.match(/Valor\s*\$\s*([\d]+[.,]\d{2})/i) || text.match(/\$\s*([\d]+[.,]\d{2})/);
+    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    const estMatch = text.match(/Establecimiento\s+([^\n\r]+?)(?:\s*Tarjeta|\s*Fecha|\s*$)/i);
+    if (estMatch) description = estMatch[1].trim();
+    const cardMatch = text.match(/Tarjeta usada\s+(\d{3,4})/i);
+    if (cardMatch) card = 'Pichincha ****' + cardMatch[1];
+    const dateMatch = text.match(/Fecha\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/i);
+    if (dateMatch) txDate = new Date(dateMatch[1].replace(' ', 'T') + ':00').toISOString();
+    type = 'consumo';
+  }
+
+  // ─── PICHINCHA: TRANSFERENCIA ───
+  else if (queryType === 'transferencia_pichincha') {
+    const amtMatch = text.match(/Monto:\s*USD\s*([\d]+[.,]\d{2})/i) || text.match(/Monto:\s*\$?\s*([\d]+[.,]\d{2})/i);
+    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    const benMatch = text.match(/Nombre del beneficiario:\s*([^\n\r]+?)(?:\s*Monto:|\s*Fecha:|\s*Concepto:|\s*$)/i);
+    if (benMatch) description = benMatch[1].trim();
+    const acctMatch = text.match(/Cuenta de origen:\s*([\w]+)/i);
+    if (acctMatch) card = 'Pichincha ' + acctMatch[1];
+    const dateMatch = text.match(/Fecha:\s*(\d{2}\/\d{2}\/\d{4})/i);
+    if (dateMatch) {
+      const parts = dateMatch[1].split('/');
+      txDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T12:00:00`).toISOString();
+    }
+    type = 'transferencia';
+  }
+
+  // ─── PRODUBANCO: CONSUMO ───
+  // Format: Valor: USD 20.74 | Establecimiento: Amazon.com | Tarjeta MasterCard Produbanco XXX0314
+  else if (queryType === 'consumo_produbanco') {
+    // Amount: "Valor: USD 20.74" or from subject "por USD 20.74"
+    const amtMatch = text.match(/Valor:\s*USD\s*([\d]+[.,]\d{2})/i) || subject.match(/por\s+USD\s*([\d]+[.,]\d{2})/i);
+    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    // Commerce: "Establecimiento: Amazon.com"
+    const estMatch = text.match(/Establecimiento:\s*([^\n\r]+?)(?:\s*Si no|\s*$)/i);
+    if (estMatch) description = estMatch[1].trim();
+    // Card: "MasterCard Produbanco XXX0314"
+    const cardMatch = text.match(/(?:MasterCard|Visa)\s+Produbanco\s+([\w]+)/i);
+    if (cardMatch) card = 'Produbanco ' + cardMatch[1];
+    // Date: "Fecha y Hora: 03/20/2026 09:07"
+    const dateMatch = text.match(/Fecha y Hora:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}:\d{2})/i);
+    if (dateMatch) txDate = new Date(`${dateMatch[3]}-${dateMatch[1]}-${dateMatch[2]}T${dateMatch[4].padStart(5,'0')}:00`).toISOString();
+    type = 'consumo';
+  }
+
+  // ─── PRODUBANCO: TRANSFERENCIA ───
+  // Format: Beneficiario: ORTIZ REYES ANA BELEN | Monto: $3150.31 | Fecha y Hora: 10/Marzo/2026 9:57
+  else if (queryType === 'transferencia_produbanco') {
+    // Amount: "Monto: $3150.31"
+    const amtMatch = text.match(/Monto:\s*\$\s*([\d]+[.,]\d{2})/i) || text.match(/Monto:\s*USD\s*([\d]+[.,]\d{2})/i);
+    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    // Beneficiary: "Beneficiario: ORTIZ REYES ANA BELEN"
+    const benMatch = text.match(/Beneficiario:\s*([^\n\r]+?)(?:\s*Banco|\s*Cuenta|\s*$)/i);
+    if (benMatch) description = benMatch[1].trim();
+    // Account: "Cuenta Beneficiario: XXX90497"
+    const acctMatch = text.match(/Cuenta Beneficiario:\s*([\w]+)/i);
+    if (acctMatch) card = 'Produbanco → ' + acctMatch[1];
+    // Date: "Fecha y Hora: 10/Marzo/2026 9:57"
+    const months = {enero:'01',febrero:'02',marzo:'03',abril:'04',mayo:'05',junio:'06',julio:'07',agosto:'08',septiembre:'09',octubre:'10',noviembre:'11',diciembre:'12'};
+    const dateMatch = text.match(/Fecha y Hora:\s*(\d{1,2})\/(\w+)\/(\d{4})\s+(\d{1,2}:\d{2})/i);
+    if (dateMatch) {
+      const mon = months[dateMatch[2].toLowerCase()] || '01';
+      txDate = new Date(`${dateMatch[3]}-${mon}-${dateMatch[1].padStart(2,'0')}T${dateMatch[4].padStart(5,'0')}:00`).toISOString();
+    }
+    type = 'transferencia';
+  }
+
+  // ─── FALLBACK ───
+  else {
+    const amtMatch = text.match(/\$\s*([\d]+[.,]\d{2})/) || text.match(/USD\s*([\d]+[.,]\d{2})/i);
+    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    description = subject || 'Transacción';
+  }
+
+  if (!amount || amount <= 0) return null;
+  if (!description) description = 'Transacción bancaria';
+
+  const catId = autoCategory(description);
+
+  return {
+    id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    emailId,
+    threadId: threadId || emailId,
+    amount,
+    description,
+    card,
+    date: txDate,
+    type,
+    source: 'gmail',
+    categoryId: catId,
+    categorized: !!catId,
+  };
+}
+
+// ─── DELETE TRANSACTION ──────────────────────────────
+function deleteTx(txId) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  const updated = state.transactions.filter(t => t.id !== txId);
+  setState({ transactions: updated, status: '✅ Gasto eliminado' });
+  setTimeout(() => setState({ status: null }), 2000);
+}
+
+// ─── RECATEGORIZE TRANSACTION ────────────────────────
+function recategorizeTx(txId, catId) {
+  const tx = state.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const descLower = tx.description.toLowerCase();
+  const newRules = { ...state.learnedRules, [descLower]: catId };
+  const updated = state.transactions.map(t =>
+    t.id === txId ? { ...t, categoryId: catId, categorized: true } : t
+  );
+  setState({ transactions: updated, learnedRules: newRules, status: '✅ Categoría actualizada' });
+  setTimeout(() => setState({ status: null }), 2000);
+}
+
+// ─── ADD CATEGORY ────────────────────────────────────
+function addCategory(label, icon) {
+  if (!label.trim()) return;
+  const id = 'custom_' + label.trim().toLowerCase().replace(/\s+/g, '_');
+  if (CATEGORIES.find(c => c.id === id)) {
+    setState({ status: '⚠️ Esa categoría ya existe' });
+    setTimeout(() => setState({ status: null }), 2000);
+    return;
+  }
+  const colors = ['#E85D75','#6C8EEF','#45B7A0','#D4A843','#9B6ED0','#E07B53','#5BAE6E','#C75B9B','#7BAFD4','#D46A3F'];
+  const color = colors[CATEGORIES.length % colors.length];
+  const newCat = { id, label: label.trim(), icon: icon || '📌', color };
+  CATEGORIES.splice(CATEGORIES.length - 1, 0, newCat); // Before "Otro"
+  const saved = JSON.parse(localStorage.getItem('gt_customCategories') || '[]');
+  saved.push(newCat);
+  localStorage.setItem('gt_customCategories', JSON.stringify(saved));
+  setState({ status: `✅ Categoría "${label.trim()}" agregada` });
+  setTimeout(() => setState({ status: null }), 2000);
+}
+
+// ─── MANUAL ENTRY ────────────────────────────────────
+function addManualTx() {
+  const amt = document.getElementById('manual-amount');
+  const desc = document.getElementById('manual-desc');
+  const type = document.getElementById('manual-type');
+  
+  const amount = parseFloat(amt.value);
+  if (!amount || !desc.value.trim()) return;
+
+  const catId = autoCategory(desc.value);
+  const tx = {
+    id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    amount,
+    description: desc.value.trim(),
+    card: '',
+    date: new Date().toISOString(),
+    type: type.value,
+    source: 'manual',
+    categoryId: catId,
+    categorized: !!catId,
+  };
+
+  const updated = [tx, ...state.transactions];
+  setState({ transactions: updated, status: '✅ Gasto agregado' });
+  amt.value = '';
+  desc.value = '';
+  setTimeout(() => setState({ status: null }), 2000);
+}
+
+// ─── CATEGORIZE ──────────────────────────────────────
+function assignCategory(catId) {
+  const uncat = state.transactions.filter(t => !t.categorized);
+  if (!uncat.length) return;
+
+  const tx = uncat[state.catIndex];
+  const descLower = tx.description.toLowerCase();
+
+  // Learn the rule
+  const newRules = { ...state.learnedRules, [descLower]: catId };
+
+  // Apply to all matching uncategorized
+  const updated = state.transactions.map(t => {
+    if (t.id === tx.id) return { ...t, categoryId: catId, categorized: true };
+    if (!t.categorized && t.description.toLowerCase() === descLower) {
+      return { ...t, categoryId: catId, categorized: true };
+    }
+    return t;
+  });
+
+  const newUncat = updated.filter(t => !t.categorized).length;
+  setState({
+    transactions: updated,
+    learnedRules: newRules,
+    catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
+  });
+}
+
+// ─── HELPERS ─────────────────────────────────────────
+function fmt$(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n); }
+function fmtDate(d) { return new Date(d).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' }); }
+function fmtTime(d) { return new Date(d).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }); }
+function getCat(id) { return CATEGORIES.find(c => c.id === id); }
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  if (attrs) Object.entries(attrs).forEach(([k, v]) => {
+    if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'className') el.className = v;
+    else if (k === 'innerHTML') el.innerHTML = v;
+    else if (typeof v === 'boolean') { if (v) el.setAttribute(k, ''); else el.removeAttribute(k); }
+    else el.setAttribute(k, v);
+  });
+  children.flat(Infinity).forEach(c => {
+    if (c == null) return;
+    el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return el;
+}
+
+// ─── RENDER ──────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+
+  if (state.view === 'setup') {
+    renderSetup(app);
+  } else {
+    renderHeader(app);
+    const content = h('div', { className: 'content' });
+    if (state.view === 'dashboard') renderDashboard(content);
+    else if (state.view === 'transactions') renderTransactions(content);
+    else if (state.view === 'categorize') renderCategorize(content);
+    app.appendChild(content);
+  }
+
+  if (state.status) {
+    app.appendChild(h('div', { className: 'status-bar' },
+      state.status.includes('✅') ? '✅' : state.status.includes('⚠️') ? '⚠️' : '⏳',
+      state.status.replace(/^[✅⚠️]\s*/, '')
+    ));
+  }
+}
+
+function renderSetup(app) {
+  const screen = h('div', { className: 'setup-screen' },
+    h('div', { className: 'setup-logo' }, '💰'),
+    h('div', { className: 'setup-title' }, 'GastosTracker'),
+    h('div', { className: 'setup-sub' },
+      'Conecta tu Gmail para escanear automáticamente los correos de tus bancos y organizar tus gastos.'
+    ),
+    h('div', { className: 'setup-steps' },
+      h('div', { className: 'setup-step' },
+        h('div', { className: 'step-num' }, '1'),
+        h('div', { innerHTML: 'Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> y crea un proyecto nuevo' })
+      ),
+      h('div', { className: 'setup-step' },
+        h('div', { className: 'step-num' }, '2'),
+        h('div', { innerHTML: 'Habilita la <strong>Gmail API</strong> en el proyecto' })
+      ),
+      h('div', { className: 'setup-step' },
+        h('div', { className: 'step-num' }, '3'),
+        h('div', { innerHTML: 'Configura la pantalla de consentimiento OAuth (tipo <code>externo</code>) y agrega tu email como usuario de prueba' })
+      ),
+      h('div', { className: 'setup-step' },
+        h('div', { className: 'step-num' }, '4'),
+        h('div', { innerHTML: 'Crea credenciales → <strong>ID de cliente OAuth</strong> → Tipo: <code>Aplicación web</code>' })
+      ),
+      h('div', { className: 'setup-step' },
+        h('div', { className: 'step-num' }, '5'),
+        h('div', { innerHTML: 'En "Orígenes autorizados de JavaScript" agrega la URL donde abrirás este archivo (ej: <code>http://localhost:5500</code> o <code>file://</code>). También agrega <code>http://localhost</code>' })
+      ),
+      h('div', { className: 'setup-step' },
+        h('div', { className: 'step-num' }, '6'),
+        h('div', { innerHTML: 'Copia el <strong>Client ID</strong> y pégalo abajo' })
+      ),
+    ),
+    h('div', { className: 'client-id-input' },
+      h('input', {
+        type: 'text',
+        placeholder: 'Tu Client ID (xxxx.apps.googleusercontent.com)',
+        value: state.clientId,
+        onInput: (e) => { state.clientId = e.target.value; },
+        id: 'clientIdInput',
+      }),
+      h('button', {
+        className: 'btn btn-primary',
+        onClick: () => {
+          if (state.clientId.trim()) {
+            localStorage.setItem('gt_clientId', state.clientId.trim());
+            setState({ view: 'dashboard' });
+          }
+        },
+      }, '→ Continuar')
+    ),
+    h('button', {
+      className: 'btn btn-ghost',
+      onClick: () => setState({ view: 'dashboard' }),
+      style: { fontSize: '12px' },
+    }, 'Saltar — usar solo modo manual'),
+  );
+  app.appendChild(screen);
+}
+
+function renderHeader(app) {
+  const uncat = state.transactions.filter(t => !t.categorized).length;
+
+  const header = h('div', { className: 'header' },
+    h('div', { className: 'header-brand' },
+      h('div', { className: 'header-icon' }, '💰'),
+      h('div', null,
+        h('div', { className: 'header-title' }, 'GastosTracker'),
+        h('div', { className: 'header-sub' }, 'Pichincha & Produbanco'),
+      )
+    ),
+    h('div', { className: 'nav' },
+      ...['dashboard', 'transactions', 'categorize'].map(v => {
+        const labels = { dashboard: 'Dashboard', transactions: 'Gastos', categorize: 'Categorizar' };
+        const btn = h('button', {
+          className: 'nav-btn' + (state.view === v ? ' active' : ''),
+          onClick: () => setState({ view: v, filter: 'all', catIndex: 0 }),
+        }, labels[v]);
+        if (v === 'categorize' && uncat > 0) {
+          btn.appendChild(h('span', { className: 'badge' }, String(uncat)));
+        }
+        return btn;
+      })
+    ),
+    h('div', { className: 'header-actions' },
+      h('button', {
+        className: 'scan-btn',
+        onClick: scanGmail,
+        disabled: state.scanning,
+      },
+        state.scanning ? h('span', { className: 'spinner' }, '↻') : '📧',
+        state.scanning ? 'Escaneando...' : 'Escanear Gmail'
+      )
+    )
+  );
+  app.appendChild(header);
+}
+
+function renderDashboard(content) {
+  const txs = state.transactions;
+  const total = txs.reduce((s, t) => s + t.amount, 0);
+  const now = new Date();
+  const thisMonth = txs.filter(t => {
+    const d = new Date(t.date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  const monthTotal = thisMonth.reduce((s, t) => s + t.amount, 0);
+  const catCount = txs.filter(t => t.categorized).length;
+
+  // Stats
+  const stats = h('div', { className: 'stats-row' },
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Total acumulado'),
+      h('div', { className: 'stat-value', style: { color: 'var(--accent)' } }, fmt$(total)),
+      h('div', { className: 'stat-sub' }, `${txs.length} transacciones`),
+    ),
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Este mes'),
+      h('div', { className: 'stat-value', style: { color: 'var(--blue)' } }, fmt$(monthTotal)),
+      h('div', { className: 'stat-sub' }, `${thisMonth.length} gastos`),
+    ),
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Categorizados'),
+      h('div', { className: 'stat-value', style: { color: 'var(--yellow)' } }, `${catCount}/${txs.length}`),
+      h('div', { className: 'stat-sub' }, txs.length ? `${Math.round((catCount / txs.length) * 100)}%` : '—'),
+    ),
+  );
+  content.appendChild(stats);
+
+  // Category bar
+  if (total > 0) {
+    const catTotals = CATEGORIES.map(c => ({
+      ...c,
+      total: txs.filter(t => t.categoryId === c.id).reduce((s, t) => s + t.amount, 0),
+    })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
+
+    if (catTotals.length > 0) {
+      const bar = h('div', { className: 'cat-bar-wrap' },
+        h('div', { className: 'cat-bar-title' }, 'Distribución por Categoría'),
+        h('div', { className: 'cat-bar' },
+          ...catTotals.map(c => h('div', { className: 'cat-bar-seg', style: { width: `${(c.total / total) * 100}%`, background: c.color } }))
+        ),
+        h('div', { className: 'cat-legend' },
+          ...catTotals.map(c => h('div', { className: 'cat-legend-item' },
+            h('div', { className: 'cat-dot', style: { background: c.color } }),
+            `${c.icon} ${c.label}`,
+            h('span', { className: 'cat-legend-amount' }, fmt$(c.total)),
+          ))
+        )
+      );
+      content.appendChild(bar);
+    }
+  }
+
+  // Daily average & Transfer vs Card
+  const sortedDates = txs.map(t => new Date(t.date)).sort((a, b) => a - b);
+  const firstDate = sortedDates.length > 0 ? sortedDates[0] : new Date();
+  const daysSinceFirst = Math.max(1, Math.ceil((new Date() - firstDate) / (1000 * 60 * 60 * 24)));
+  const dailyAvg = total / daysSinceFirst;
+
+  const transferTotal = txs.filter(t => t.type === 'transferencia').reduce((s, t) => s + t.amount, 0);
+  const cardTotal = txs.filter(t => t.type === 'consumo').reduce((s, t) => s + t.amount, 0);
+  const maxType = Math.max(transferTotal, cardTotal, 1);
+
+  const bottomCards = h('div', { className: 'stats-row' },
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Gasto diario promedio'),
+      h('div', { className: 'stat-value', style: { color: 'var(--orange)' } }, fmt$(dailyAvg)),
+      h('div', { className: 'stat-sub' }, `en ${daysSinceFirst} día${daysSinceFirst !== 1 ? 's' : ''}`),
+    ),
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Transferencias vs Tarjeta'),
+      h('div', { style: { marginTop: '10px' } },
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Transferencias'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(transferTotal)),
+        ),
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(transferTotal / maxType) * 100}%`, background: 'var(--blue)', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ),
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Tarjeta de crédito'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(cardTotal)),
+        ),
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(cardTotal / maxType) * 100}%`, background: 'var(--accent)', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ),
+      ),
+    ),
+  );
+  content.appendChild(bottomCards);
+
+  // Manual entry
+  renderManualEntry(content);
+}
+
+function renderTransactions(content) {
+  const txs = state.transactions;
+  const uncat = txs.filter(t => !t.categorized);
+
+  // Filters
+  const filters = h('div', { className: 'filters' },
+    h('button', {
+      className: 'filter-pill' + (state.filter === 'all' ? ' active' : ''),
+      onClick: () => setState({ filter: 'all' }),
+    }, 'Todos ', h('span', { className: 'count' }, String(txs.length))),
+    h('button', {
+      className: 'filter-pill' + (state.filter === 'uncategorized' ? ' active' : ''),
+      onClick: () => setState({ filter: 'uncategorized' }),
+      style: uncat.length ? { color: 'var(--red)', borderColor: 'rgba(255,92,92,0.2)' } : {},
+    }, 'Sin categoría ', h('span', { className: 'count' }, String(uncat.length))),
+    ...CATEGORIES.filter(c => txs.some(t => t.categoryId === c.id)).map(c =>
+      h('button', {
+        className: 'filter-pill' + (state.filter === c.id ? ' active' : ''),
+        onClick: () => setState({ filter: c.id }),
+      }, `${c.icon} ${c.label} `, h('span', { className: 'count' }, String(txs.filter(t => t.categoryId === c.id).length)))
+    ),
+  );
+  content.appendChild(filters);
+
+  const filtered = state.filter === 'all' ? txs
+    : state.filter === 'uncategorized' ? uncat
+    : txs.filter(t => t.categoryId === state.filter);
+
+  if (filtered.length === 0) {
+    content.appendChild(h('div', { className: 'empty' },
+      h('div', { className: 'empty-icon' }, '📭'),
+      h('div', { className: 'empty-title' }, state.filter !== 'all' ? 'Nada aquí' : 'Sin transacciones'),
+      h('div', null, 'Escanea tu Gmail o agrega gastos manualmente'),
+    ));
+  } else {
+    filtered.forEach(tx => {
+      const cat = getCat(tx.categoryId);
+      const row = h('div', { className: 'tx-row' },
+        h('div', { className: 'tx-icon', style: { background: cat ? cat.color + '18' : 'rgba(255,255,255,0.06)' } }, cat ? cat.icon : '❓'),
+        h('div', { className: 'tx-info' },
+          h('div', { className: 'tx-desc' }, tx.description),
+          h('div', { className: 'tx-meta' },
+            h('span', null, fmtDate(tx.date)),
+            h('span', null, fmtTime(tx.date)),
+            tx.card ? h('span', null, tx.card) : null,
+            tx.type ? h('span', { className: 'tx-type', style: {
+              background: tx.type === 'transferencia' ? 'rgba(91,141,239,0.12)' : 'rgba(0,229,176,0.08)',
+              color: tx.type === 'transferencia' ? 'var(--blue)' : 'var(--accent)',
+            } }, tx.type) : null,
+          ),
+          tx.note ? h('div', {
+            style: { fontSize: '11px', color: 'var(--accent)', marginTop: '3px', fontStyle: 'italic', cursor: 'pointer' },
+            title: 'Clic para editar',
+            onClick: function() {
+              const input = h('input', {
+                type: 'text', value: tx.note || '',
+                style: {
+                  fontFamily: 'var(--font)', fontSize: '11px', color: 'var(--text)',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid var(--accent)',
+                  borderRadius: '4px', padding: '3px 6px', width: '100%', outline: 'none', marginTop: '3px',
+                },
+                onBlur: function() {
+                  const updated = state.transactions.map(t => t.id === tx.id ? { ...t, note: this.value.trim() } : t);
+                  setState({ transactions: updated });
+                },
+                onKeydown: function(e) { if (e.key === 'Enter') this.blur(); },
+              });
+              this.replaceWith(input);
+              input.focus();
+            },
+          }, '📝 ' + tx.note) : h('button', {
+            style: {
+              fontFamily: 'var(--font)', fontSize: '11px', color: 'var(--yellow)',
+              background: 'rgba(245,197,66,0.08)', border: '1px solid rgba(245,197,66,0.15)',
+              borderRadius: '6px', padding: '4px 10px', marginTop: '4px',
+              cursor: 'pointer', textAlign: 'left',
+            },
+            onClick: function() {
+              const input = h('input', {
+                type: 'text', placeholder: 'Agregar nota...',
+                style: {
+                  fontFamily: 'var(--font)', fontSize: '11px', color: 'var(--text)',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid var(--accent)',
+                  borderRadius: '4px', padding: '3px 6px', width: '100%', outline: 'none', marginTop: '3px',
+                },
+                onBlur: function() {
+                  if (this.value.trim()) {
+                    const updated = state.transactions.map(t => t.id === tx.id ? { ...t, note: this.value.trim() } : t);
+                    setState({ transactions: updated });
+                  } else { render(); }
+                },
+                onKeydown: function(e) { if (e.key === 'Enter') this.blur(); if (e.key === 'Escape') { render(); } },
+              });
+              this.replaceWith(input);
+              input.focus();
+            },
+          }, '+ nota'),
+        ),
+        h('div', { className: 'tx-amount' }, '-' + fmt$(tx.amount)),
+        tx.emailId ? h('a', {
+          href: `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+          target: '_blank',
+          title: 'Ver correo original',
+          style: {
+            fontSize: '14px',
+            textDecoration: 'none',
+            flexShrink: '0',
+            opacity: '0.4',
+            transition: 'opacity 0.15s',
+          },
+          onMouseenter: function() { this.style.opacity = '1'; },
+          onMouseleave: function() { this.style.opacity = '0.4'; },
+        }, '📧') : null,
+        h('div', { className: 'tx-actions' },
+          !tx.categorized ? h('button', {
+            className: 'tx-cat-btn',
+            onClick: () => {
+              state.catIndex = state.transactions.filter(t => !t.categorized).findIndex(t => t.id === tx.id);
+              setState({ view: 'categorize' });
+            },
+          }, 'Categorizar') : h('button', {
+            className: 'tx-recat-btn',
+            onClick: function(e) {
+              // Toggle dropdown
+              const existing = this.parentElement.querySelector('.recat-dropdown');
+              if (existing) { existing.remove(); return; }
+              // Close any other open dropdowns
+              document.querySelectorAll('.recat-dropdown').forEach(d => d.remove());
+              const dropdown = h('div', { className: 'recat-dropdown' },
+                ...CATEGORIES.map(c => h('button', {
+                  className: 'recat-option',
+                  onClick: (ev) => { ev.stopPropagation(); recategorizeTx(tx.id, c.id); },
+                }, h('span', null, c.icon), c.label))
+              );
+              this.appendChild(dropdown);
+              // Close on outside click
+              setTimeout(() => {
+                const close = (ev) => { dropdown.remove(); document.removeEventListener('click', close); };
+                document.addEventListener('click', close);
+              }, 10);
+            },
+          }, cat ? cat.icon + ' ' + cat.label : 'Recategorizar'),
+          h('button', {
+            className: 'tx-del-btn',
+            onClick: () => deleteTx(tx.id),
+          }, '✕'),
+        ),
+      );
+      content.appendChild(row);
+    });
+  }
+
+  renderManualEntry(content);
+}
+
+function renderCategorize(content) {
+  const uncat = state.transactions.filter(t => !t.categorized);
+
+  if (uncat.length === 0) {
+    content.appendChild(h('div', { className: 'empty' },
+      h('div', { className: 'empty-icon' }, '🎉'),
+      h('div', { className: 'empty-title' }, '¡Todo categorizado!'),
+      h('div', null, 'No hay gastos pendientes de clasificar'),
+    ));
+    return;
+  }
+
+  const idx = Math.min(state.catIndex, uncat.length - 1);
+  const tx = uncat[idx];
+
+  const wrap = h('div', { className: 'categorize-wrap' },
+    h('div', { className: 'categorize-count' },
+      `${uncat.length} gasto${uncat.length !== 1 ? 's' : ''} por categorizar`
+    ),
+    h('div', { className: 'categorize-card' },
+      h('div', { className: 'categorize-amount' }, '-' + fmt$(tx.amount)),
+      h('div', { className: 'categorize-desc' }, tx.description),
+      h('div', { className: 'categorize-meta' },
+        `${fmtDate(tx.date)} · ${fmtTime(tx.date)}${tx.card ? ' · ' + tx.card : ''}${tx.type ? ' · ' + tx.type : ''}`
+      ),
+      tx.emailId ? h('a', {
+        href: `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+        target: '_blank',
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginTop: '12px',
+          fontSize: '12px',
+          color: 'var(--accent)',
+          textDecoration: 'none',
+          background: 'rgba(0,229,176,0.08)',
+          border: '1px solid rgba(0,229,176,0.15)',
+          borderRadius: '8px',
+          padding: '6px 14px',
+        },
+      }, '📧 Ver correo original') : null,
+      h('input', {
+        type: 'text',
+        placeholder: 'Agregar nota o descripción...',
+        id: 'cat-note-input',
+        value: tx.note || '',
+        style: {
+          fontFamily: 'var(--font)', fontSize: '13px', color: 'var(--text)',
+          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+          borderRadius: '8px', padding: '10px 14px', width: '100%', outline: 'none',
+          marginTop: '12px', boxSizing: 'border-box',
+        },
+        onFocus: function() { this.style.borderColor = 'var(--accent)'; },
+        onBlur: function() {
+          this.style.borderColor = 'var(--border)';
+          // Save note on blur
+          const note = this.value.trim();
+          const updated = state.transactions.map(t => t.id === tx.id ? { ...t, note } : t);
+          setState({ transactions: updated });
+        },
+        onKeydown: function(e) { if (e.key === 'Enter') this.blur(); },
+      }),
+    ),
+    h('div', { className: 'cat-grid' },
+      ...CATEGORIES.map(cat =>
+        h('button', {
+          className: 'cat-btn',
+          style: { background: cat.color + '12', borderColor: cat.color + '30' },
+          onClick: () => assignCategory(cat.id),
+          onMouseenter: function() { this.style.background = cat.color + '25'; this.style.borderColor = cat.color + '50'; },
+          onMouseleave: function() { this.style.background = cat.color + '12'; this.style.borderColor = cat.color + '30'; },
+        },
+          h('span', null, cat.icon),
+          cat.label,
+        )
+      ),
+      // Add category button
+      h('button', {
+        className: 'cat-btn',
+        style: { background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)', borderStyle: 'dashed' },
+        onClick: function() {
+          const existing = document.getElementById('new-cat-form');
+          if (existing) { existing.remove(); return; }
+          const form = h('div', { id: 'new-cat-form', style: {
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '16px',
+            marginTop: '16px',
+          } },
+            h('div', { style: { fontSize: '13px', fontWeight: '600', color: 'var(--text2)', marginBottom: '12px' } }, 'Nueva categoría'),
+            h('input', {
+              type: 'text',
+              placeholder: 'Nombre (ej: Viajes)',
+              id: 'new-cat-name',
+              style: {
+                fontFamily: 'var(--font)', fontSize: '13px', color: 'var(--text)',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+                borderRadius: '8px', padding: '10px 14px', width: '100%', outline: 'none',
+                marginBottom: '10px', boxSizing: 'border-box',
+              },
+            }),
+            h('div', { style: { fontSize: '12px', color: 'var(--text3)', marginBottom: '6px' } }, 'Elige un ícono:'),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' } },
+              ...EMOJI_OPTIONS.map((em, i) =>
+                h('button', {
+                  style: {
+                    fontSize: '18px', padding: '6px 8px', background: i === 0 ? 'rgba(0,229,176,0.15)' : 'rgba(255,255,255,0.04)',
+                    border: i === 0 ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    borderRadius: '8px', cursor: 'pointer',
+                  },
+                  onClick: function(e) {
+                    document.querySelectorAll('#new-cat-form .emoji-sel').forEach(b => {
+                      b.style.background = 'rgba(255,255,255,0.04)';
+                      b.style.borderColor = 'var(--border)';
+                    });
+                    this.style.background = 'rgba(0,229,176,0.15)';
+                    this.style.borderColor = 'var(--accent)';
+                    document.getElementById('new-cat-icon').value = em;
+                  },
+                  className: 'emoji-sel',
+                }, em)
+              )
+            ),
+            h('input', { type: 'hidden', id: 'new-cat-icon', value: EMOJI_OPTIONS[0] }),
+            h('div', { style: { display: 'flex', gap: '8px' } },
+              h('button', {
+                className: 'btn btn-primary',
+                style: { padding: '8px 20px', fontSize: '13px' },
+                onClick: () => {
+                  const name = document.getElementById('new-cat-name').value;
+                  const icon = document.getElementById('new-cat-icon').value;
+                  if (name.trim()) {
+                    addCategory(name, icon);
+                    document.getElementById('new-cat-form').remove();
+                  }
+                },
+              }, 'Crear'),
+              h('button', {
+                className: 'btn btn-ghost',
+                style: { padding: '8px 16px', fontSize: '13px' },
+                onClick: () => document.getElementById('new-cat-form').remove(),
+              }, 'Cancelar'),
+            ),
+          );
+          this.closest('.categorize-wrap').appendChild(form);
+        },
+        onMouseenter: function() { this.style.background = 'rgba(255,255,255,0.06)'; },
+        onMouseleave: function() { this.style.background = 'rgba(255,255,255,0.03)'; },
+      },
+        h('span', null, '➕'),
+        'Nueva categoría',
+      ),
+    ),
+  );
+
+  if (uncat.length > 1) {
+    const nav = h('div', { className: 'cat-nav' },
+      h('button', {
+        onClick: () => setState({ catIndex: Math.max(0, idx - 1) }),
+        disabled: idx === 0,
+      }, '← Anterior'),
+      h('span', { className: 'pos' }, `${idx + 1}/${uncat.length}`),
+      h('button', {
+        onClick: () => setState({ catIndex: Math.min(uncat.length - 1, idx + 1) }),
+        disabled: idx >= uncat.length - 1,
+      }, 'Siguiente →'),
+    );
+    wrap.appendChild(nav);
+  }
+
+  content.appendChild(wrap);
+}
+
+function renderManualEntry(content) {
+  const wrap = h('div', { className: 'manual-wrap' },
+    h('div', { className: 'manual-title' }, '➕ Agregar gasto manual'),
+    h('div', { className: 'manual-row' },
+      h('input', { type: 'number', placeholder: 'Monto ($)', step: '0.01', id: 'manual-amount' }),
+      h('input', { type: 'text', placeholder: 'Descripción (ej: Supermaxi)', id: 'manual-desc',
+        onKeydown: (e) => { if (e.key === 'Enter') addManualTx(); }
+      }),
+      h('select', { id: 'manual-type' },
+        h('option', { value: 'consumo' }, 'Consumo tarjeta'),
+        h('option', { value: 'transferencia' }, 'Transferencia'),
+      ),
+      h('button', { className: 'btn btn-primary', style: { padding: '10px 20px' }, onClick: addManualTx }, 'Agregar'),
+    ),
+  );
+  content.appendChild(wrap);
+}
+
+// ─── INIT ────────────────────────────────────────────
+render();
+</script>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+
+</body>
+</html>
