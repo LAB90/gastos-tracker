@@ -1436,15 +1436,15 @@ function renderTransactions(content) {
           h('div', { style: { display: 'flex', alignItems: 'center' } },
             logo,
             h('span', { className: 'tx-desc' }, tx.description),
+            tx.type ? h('span', { style: {
+              fontSize: '11px', fontWeight: '500', marginLeft: '6px', flexShrink: '0',
+              color: tx.type === 'transferencia' ? 'var(--blue)' : 'var(--accent)',
+            } }, tx.type) : null,
           ),
           h('div', { className: 'tx-meta' },
             h('span', null, fmtDate(tx.date)),
             h('span', null, fmtTime(tx.date)),
             tx.card ? h('span', null, tx.card) : null,
-            tx.type ? h('span', { className: 'tx-type', style: {
-              background: tx.type === 'transferencia' ? 'rgba(91,141,239,0.12)' : 'rgba(0,229,176,0.08)',
-              color: tx.type === 'transferencia' ? 'var(--blue)' : 'var(--accent)',
-            } }, tx.type) : null,
           ),
           h('div', { className: 'tx-amount', style: { marginTop: '4px' } }, '-' + fmt$(tx.amount)),
           tx.note ? h('div', {
