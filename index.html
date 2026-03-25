@@ -1147,6 +1147,14 @@ function fmt$(n) { return new Intl.NumberFormat('en-US', { style: 'currency', cu
 function fmtDate(d) { return new Date(d).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' }); }
 function fmtTime(d) { return new Date(d).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }); }
 function getCat(id) { return CATEGORIES.find(c => c.id === id); }
+function bankLogo(tx) {
+  const qtype = tx.source === 'manual' ? '' : (tx.card || '');
+  const isProdubanco = qtype.toLowerCase().includes('produbanco');
+  const isPichincha = qtype.toLowerCase().includes('pichincha');
+  if (isProdubanco) return h('span', { style: { display: 'inline-block', width: '18px', height: '18px', borderRadius: '4px', background: '#006B3F', color: '#fff', fontSize: '10px', fontWeight: '700', textAlign: 'center', lineHeight: '18px', flexShrink: '0', marginRight: '6px' } }, 'P');
+  if (isPichincha) return h('span', { style: { display: 'inline-block', width: '18px', height: '18px', borderRadius: '4px', background: '#FFD100', color: '#003B7A', fontSize: '10px', fontWeight: '700', textAlign: 'center', lineHeight: '18px', flexShrink: '0', marginRight: '6px' } }, 'B');
+  return null;
+}
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   if (attrs) Object.entries(attrs).forEach(([k, v]) => {
@@ -1317,18 +1325,18 @@ function renderDashboard(content) {
   );
   content.appendChild(stats);
 
-  // Category bar
-  if (total > 0) {
+  // Category bar — current month only
+  if (monthTotal > 0) {
     const catTotals = CATEGORIES.map(c => ({
       ...c,
-      total: txs.filter(t => t.categoryId === c.id).reduce((s, t) => s + t.amount, 0),
+      total: thisMonth.filter(t => t.categoryId === c.id).reduce((s, t) => s + t.amount, 0),
     })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
 
     if (catTotals.length > 0) {
       const bar = h('div', { className: 'cat-bar-wrap' },
-        h('div', { className: 'cat-bar-title' }, 'Distribución por Categoría'),
+        h('div', { className: 'cat-bar-title' }, 'Distribución por Categoría (este mes)'),
         h('div', { className: 'cat-bar' },
-          ...catTotals.map(c => h('div', { className: 'cat-bar-seg', style: { width: `${(c.total / total) * 100}%`, background: c.color } }))
+          ...catTotals.map(c => h('div', { className: 'cat-bar-seg', style: { width: `${(c.total / monthTotal) * 100}%`, background: c.color } }))
         ),
         h('div', { className: 'cat-legend' },
           ...catTotals.map(c => h('div', { className: 'cat-legend-item' },
@@ -1421,10 +1429,14 @@ function renderTransactions(content) {
   } else {
     filtered.forEach(tx => {
       const cat = getCat(tx.categoryId);
-      const row = h('div', { className: 'tx-row' },
+      const logo = bankLogo(tx);
+      const row = h('div', { className: 'tx-row', style: { flexWrap: 'wrap' } },
         h('div', { className: 'tx-icon', style: { background: cat ? cat.color + '18' : 'rgba(255,255,255,0.06)' } }, cat ? cat.icon : '❓'),
-        h('div', { className: 'tx-info' },
-          h('div', { className: 'tx-desc' }, tx.description),
+        h('div', { className: 'tx-info', style: { flex: '1', minWidth: '0' } },
+          h('div', { style: { display: 'flex', alignItems: 'center' } },
+            logo,
+            h('span', { className: 'tx-desc' }, tx.description),
+          ),
           h('div', { className: 'tx-meta' },
             h('span', null, fmtDate(tx.date)),
             h('span', null, fmtTime(tx.date)),
@@ -1434,6 +1446,7 @@ function renderTransactions(content) {
               color: tx.type === 'transferencia' ? 'var(--blue)' : 'var(--accent)',
             } }, tx.type) : null,
           ),
+          h('div', { className: 'tx-amount', style: { marginTop: '4px' } }, '-' + fmt$(tx.amount)),
           tx.note ? h('div', {
             style: { fontSize: '11px', color: 'var(--accent)', marginTop: '3px', fontStyle: 'italic', cursor: 'pointer' },
             title: 'Clic para editar',
@@ -1482,22 +1495,23 @@ function renderTransactions(content) {
             },
           }, '+ nota'),
         ),
-        h('div', { className: 'tx-amount' }, '-' + fmt$(tx.amount)),
-        tx.emailId ? h('a', {
-          href: `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
-          target: '_blank',
-          title: 'Ver correo original',
-          style: {
-            fontSize: '14px',
-            textDecoration: 'none',
-            flexShrink: '0',
-            opacity: '0.4',
-            transition: 'opacity 0.15s',
-          },
-          onMouseenter: function() { this.style.opacity = '1'; },
-          onMouseleave: function() { this.style.opacity = '0.4'; },
-        }, '📧') : null,
-        h('div', { className: 'tx-actions' },
+        h('div', { className: 'tx-actions', style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '0' } },
+          tx.emailId ? h('a', {
+            href: `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+            target: '_blank',
+            title: 'Ver correo original',
+            style: {
+              fontSize: '16px',
+              textDecoration: 'none',
+              flexShrink: '0',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'center',
+            },
+          }, '📧') : null,
           !tx.categorized ? h('button', {
             className: 'tx-cat-btn',
             onClick: () => {
@@ -1507,10 +1521,8 @@ function renderTransactions(content) {
           }, 'Categorizar') : h('button', {
             className: 'tx-recat-btn',
             onClick: function(e) {
-              // Toggle dropdown
               const existing = this.parentElement.querySelector('.recat-dropdown');
               if (existing) { existing.remove(); return; }
-              // Close any other open dropdowns
               document.querySelectorAll('.recat-dropdown').forEach(d => d.remove());
               const dropdown = h('div', { className: 'recat-dropdown' },
                 ...CATEGORIES.map(c => h('button', {
@@ -1519,7 +1531,6 @@ function renderTransactions(content) {
                 }, h('span', null, c.icon), c.label))
               );
               this.appendChild(dropdown);
-              // Close on outside click
               setTimeout(() => {
                 const close = (ev) => { dropdown.remove(); document.removeEventListener('click', close); };
                 document.addEventListener('click', close);
@@ -1560,7 +1571,10 @@ function renderCategorize(content) {
     ),
     h('div', { className: 'categorize-card' },
       h('div', { className: 'categorize-amount' }, '-' + fmt$(tx.amount)),
-      h('div', { className: 'categorize-desc' }, tx.description),
+      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' } },
+        bankLogo(tx),
+        h('span', { className: 'categorize-desc' }, tx.description),
+      ),
       h('div', { className: 'categorize-meta' },
         `${fmtDate(tx.date)} · ${fmtTime(tx.date)}${tx.card ? ' · ' + tx.card : ''}${tx.type ? ' · ' + tx.type : ''}`
       ),
@@ -1604,7 +1618,11 @@ function renderCategorize(content) {
       }),
     ),
     h('div', { className: 'cat-grid' },
-      ...CATEGORIES.map(cat =>
+      ...[...CATEGORIES].sort((a, b) => {
+        const countA = state.transactions.filter(t => t.categoryId === a.id).length;
+        const countB = state.transactions.filter(t => t.categoryId === b.id).length;
+        return countB - countA;
+      }).map(cat =>
         h('button', {
           className: 'cat-btn',
           style: { background: cat.color + '12', borderColor: cat.color + '30' },
