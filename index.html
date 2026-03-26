@@ -1122,24 +1122,49 @@ function assignCategory(catId) {
   const tx = uncat[state.catIndex];
   const descLower = tx.description.toLowerCase();
 
-  // Learn the rule
-  const newRules = { ...state.learnedRules, [descLower]: catId };
+  // Animate the card sliding out
+  const card = document.querySelector('.categorize-card');
+  if (card) {
+    card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+    card.style.transform = 'translateX(-120%)';
+    card.style.opacity = '0';
+  }
 
-  // Apply to all matching uncategorized
-  const updated = state.transactions.map(t => {
-    if (t.id === tx.id) return { ...t, categoryId: catId, categorized: true };
-    if (!t.categorized && t.description.toLowerCase() === descLower) {
-      return { ...t, categoryId: catId, categorized: true };
-    }
-    return t;
-  });
+  setTimeout(() => {
+    // Learn the rule
+    const newRules = { ...state.learnedRules, [descLower]: catId };
 
-  const newUncat = updated.filter(t => !t.categorized).length;
-  setState({
-    transactions: updated,
-    learnedRules: newRules,
-    catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
-  });
+    // Apply to all matching uncategorized
+    const updated = state.transactions.map(t => {
+      if (t.id === tx.id) return { ...t, categoryId: catId, categorized: true };
+      if (!t.categorized && t.description.toLowerCase() === descLower) {
+        return { ...t, categoryId: catId, categorized: true };
+      }
+      return t;
+    });
+
+    const newUncat = updated.filter(t => !t.categorized).length;
+    setState({
+      transactions: updated,
+      learnedRules: newRules,
+      catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
+    });
+
+    // Animate the new card sliding in
+    requestAnimationFrame(() => {
+      const newCard = document.querySelector('.categorize-card');
+      if (newCard) {
+        newCard.style.transform = 'translateX(120%)';
+        newCard.style.opacity = '0';
+        newCard.style.transition = 'none';
+        requestAnimationFrame(() => {
+          newCard.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+          newCard.style.transform = 'translateX(0)';
+          newCard.style.opacity = '1';
+        });
+      }
+    });
+  }, 300);
 }
 
 // ─── HELPERS ─────────────────────────────────────────
@@ -1704,6 +1729,8 @@ function renderCategorize(content) {
             ),
           );
           this.closest('.categorize-wrap').appendChild(form);
+          setTimeout(() => form.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+          setTimeout(() => document.getElementById('new-cat-name').focus(), 300);
         },
         onMouseenter: function() { this.style.background = 'rgba(255,255,255,0.06)'; },
         onMouseleave: function() { this.style.background = 'rgba(255,255,255,0.03)'; },
