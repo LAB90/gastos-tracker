@@ -771,7 +771,10 @@ const AUTO_RULES = {
 let state = {
   view: 'setup',        // setup | dashboard | transactions | categorize
   clientId: localStorage.getItem('gt_clientId') || '',
+  msClientId: localStorage.getItem('gt_msClientId') || '',
   accessToken: null,
+  msAccessToken: null,
+  provider: localStorage.getItem('gt_provider') || '',  // 'google' | 'microsoft' | 'both'
   transactions: JSON.parse(localStorage.getItem('gt_transactions') || '[]'),
   learnedRules: JSON.parse(localStorage.getItem('gt_learnedRules') || '{}'),
   scanning: false,
@@ -780,8 +783,8 @@ let state = {
   catIndex: 0,
 };
 
-// Check if we have a valid token
-if (localStorage.getItem('gt_clientId')) {
+// Check if we have a valid config
+if (localStorage.getItem('gt_clientId') || localStorage.getItem('gt_msClientId')) {
   state.view = 'dashboard';
 }
 
@@ -926,7 +929,123 @@ async function scanGmail() {
   }
 }
 
-// ─── HTML TO TEXT ─────────────────────────────────────
+// ─── MICROSOFT AUTH & SCAN ──────────────────────────
+let msalInstance = null;
+
+function initMsalInstance() {
+  if (msalInstance) return;
+  const msClientId = state.msClientId.trim();
+  if (!msClientId || typeof msal === 'undefined') return;
+  msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: msClientId,
+      authority: 'https://login.microsoftonline.com/common',
+      redirectUri: window.location.origin + window.location.pathname,
+    },
+    cache: { cacheLocation: 'localStorage' },
+  });
+}
+
+async function initMicrosoftAuth() {
+  initMsalInstance();
+  if (!msalInstance) return;
+  try {
+    const loginResp = await msalInstance.loginPopup({ scopes: ['Mail.Read'] });
+    if (loginResp.account) {
+      const tokenResp = await msalInstance.acquireTokenSilent({ scopes: ['Mail.Read'], account: loginResp.account });
+      state.msAccessToken = tokenResp.accessToken;
+      setState({ status: '✅ Conectado a Outlook' });
+      setTimeout(() => setState({ status: null }), 3000);
+    }
+  } catch (e) {
+    console.error('Microsoft auth error:', e);
+    setState({ status: '⚠️ Error al conectar con Microsoft' });
+    setTimeout(() => setState({ status: null }), 4000);
+  }
+}
+
+async function getMsToken() {
+  initMsalInstance();
+  if (!msalInstance) return null;
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) {
+    await initMicrosoftAuth();
+    return state.msAccessToken;
+  }
+  try {
+    const tokenResp = await msalInstance.acquireTokenSilent({ scopes: ['Mail.Read'], account: accounts[0] });
+    state.msAccessToken = tokenResp.accessToken;
+    return tokenResp.accessToken;
+  } catch (e) {
+    await initMicrosoftAuth();
+    return state.msAccessToken;
+  }
+}
+
+async function scanOutlook() {
+  const token = await getMsToken();
+  if (!token) return;
+
+  try {
+    const existingKeys = new Set(state.transactions.map(t => t.emailId));
+    const newTxs = [];
+
+    async function searchMs(filter, queryType) {
+      try {
+        const res = await fetch(
+          `https://graph.microsoft.com/v1.0/me/messages?$filter=${encodeURIComponent(filter)}&$top=50&$select=id,subject,body,receivedDateTime`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.status === 401) { state.msAccessToken = null; await initMicrosoftAuth(); return; }
+        const data = await res.json();
+        if (!data.value) return;
+        for (const msg of data.value) {
+          if (existingKeys.has(msg.id)) continue;
+          const bodyText = msg.body?.contentType === 'html' ? htmlToText(msg.body.content) : (msg.body?.content || '');
+          const tx = parseTransaction(bodyText, msg.subject, msg.receivedDateTime, msg.id, msg.id, queryType);
+          if (tx) newTxs.push(tx);
+        }
+      } catch (e) { /* continue */ }
+    }
+
+    setState({ status: 'Buscando consumos Produbanco (Outlook)...' });
+    await searchMs("from/emailAddress/address eq 'bancaenlinea@produbanco.com' and contains(subject,'Consumo Tarjeta')", 'consumo_produbanco');
+
+    setState({ status: `${newTxs.length} gastos. Transferencias Produbanco (Outlook)...` });
+    await searchMs("from/emailAddress/address eq 'bancaenlinea@produbanco.com' and contains(subject,'Transferencia Ingresada')", 'transferencia_produbanco');
+
+    setState({ status: `${newTxs.length} gastos. Consumos Pichincha (Outlook)...` });
+    await searchMs("from/emailAddress/address eq 'servicios@tarjetasbancopichincha.com' and contains(subject,'Notificación de Consumos')", 'consumo_pichincha');
+
+    setState({ status: `${newTxs.length} gastos. Transferencias Pichincha (Outlook)...` });
+    await searchMs("from/emailAddress/address eq 'banco@pichincha.com' and contains(subject,'TRANSFERENCIA BANCA ELECTRONICA')", 'transferencia_pichincha');
+
+    if (newTxs.length > 0) {
+      const updated = [...newTxs, ...state.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+      setState({ transactions: updated, status: `✅ ${newTxs.length} nueva(s) de Outlook` });
+    }
+    setTimeout(() => setState({ status: null }), 4000);
+  } catch (e) {
+    console.error('Outlook scan error:', e);
+    setState({ status: '⚠️ Error al escanear Outlook.' });
+    setTimeout(() => setState({ status: null }), 4000);
+  }
+}
+
+// ─── UNIFIED SCAN ───────────────────────────────────
+async function scanAll() {
+  setState({ scanning: true, status: 'Escaneando correos...' });
+  const newsBefore = state.transactions.length;
+  if (state.clientId) await scanGmail();
+  if (state.msClientId) await scanOutlook();
+  const total = state.transactions.length - newsBefore;
+  if (total > 0) {
+    setState({ scanning: false, status: `✅ ${total} nueva(s) transacción(es) en total` });
+  } else {
+    setState({ scanning: false, status: 'No se encontraron nuevas transacciones' });
+  }
+  setTimeout(() => setState({ status: null }), 4000);
+}
 function htmlToText(html) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
@@ -1226,56 +1345,64 @@ function renderSetup(app) {
     h('div', { className: 'setup-logo' }, '💰'),
     h('div', { className: 'setup-title' }, 'GastosTracker'),
     h('div', { className: 'setup-sub' },
-      'Conecta tu Gmail para escanear automáticamente los correos de tus bancos y organizar tus gastos.'
+      'Conecta tu correo para escanear automáticamente las notificaciones de tus bancos y organizar tus gastos.'
     ),
-    h('div', { className: 'setup-steps' },
-      h('div', { className: 'setup-step' },
-        h('div', { className: 'step-num' }, '1'),
-        h('div', { innerHTML: 'Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> y crea un proyecto nuevo' })
+
+    // Gmail section
+    h('div', { className: 'setup-steps', style: { marginBottom: '16px' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' } },
+        h('div', { style: { width: '28px', height: '28px', borderRadius: '6px', background: '#FFD100', color: '#003B7A', fontSize: '12px', fontWeight: '700', textAlign: 'center', lineHeight: '28px' } }, 'G'),
+        h('div', { style: { fontWeight: '600', fontSize: '15px', color: 'var(--text)' } }, 'Gmail (Google)'),
+        state.clientId ? h('span', { style: { fontSize: '11px', color: 'var(--accent)', marginLeft: 'auto' } }, '✅ Configurado') : null,
       ),
-      h('div', { className: 'setup-step' },
-        h('div', { className: 'step-num' }, '2'),
-        h('div', { innerHTML: 'Habilita la <strong>Gmail API</strong> en el proyecto' })
-      ),
-      h('div', { className: 'setup-step' },
-        h('div', { className: 'step-num' }, '3'),
-        h('div', { innerHTML: 'Configura la pantalla de consentimiento OAuth (tipo <code>externo</code>) y agrega tu email como usuario de prueba' })
-      ),
-      h('div', { className: 'setup-step' },
-        h('div', { className: 'step-num' }, '4'),
-        h('div', { innerHTML: 'Crea credenciales → <strong>ID de cliente OAuth</strong> → Tipo: <code>Aplicación web</code>' })
-      ),
-      h('div', { className: 'setup-step' },
-        h('div', { className: 'step-num' }, '5'),
-        h('div', { innerHTML: 'En "Orígenes autorizados de JavaScript" agrega la URL donde abrirás este archivo (ej: <code>http://localhost:5500</code> o <code>file://</code>). También agrega <code>http://localhost</code>' })
-      ),
-      h('div', { className: 'setup-step' },
-        h('div', { className: 'step-num' }, '6'),
-        h('div', { innerHTML: 'Copia el <strong>Client ID</strong> y pégalo abajo' })
+      h('div', { className: 'client-id-input', style: { marginBottom: '0' } },
+        h('input', {
+          type: 'text',
+          placeholder: 'Google Client ID (xxxx.apps.googleusercontent.com)',
+          value: state.clientId,
+          onInput: (e) => { state.clientId = e.target.value; },
+          id: 'clientIdInput',
+        }),
       ),
     ),
-    h('div', { className: 'client-id-input' },
-      h('input', {
-        type: 'text',
-        placeholder: 'Tu Client ID (xxxx.apps.googleusercontent.com)',
-        value: state.clientId,
-        onInput: (e) => { state.clientId = e.target.value; },
-        id: 'clientIdInput',
-      }),
-      h('button', {
-        className: 'btn btn-primary',
-        onClick: () => {
-          if (state.clientId.trim()) {
-            localStorage.setItem('gt_clientId', state.clientId.trim());
-            setState({ view: 'dashboard' });
-          }
-        },
-      }, '→ Continuar')
+
+    // Microsoft section
+    h('div', { className: 'setup-steps', style: { marginBottom: '20px' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' } },
+        h('div', { style: { width: '28px', height: '28px', borderRadius: '6px', background: '#0078D4', color: '#fff', fontSize: '12px', fontWeight: '700', textAlign: 'center', lineHeight: '28px' } }, 'M'),
+        h('div', { style: { fontWeight: '600', fontSize: '15px', color: 'var(--text)' } }, 'Outlook / Hotmail (Microsoft)'),
+        state.msClientId ? h('span', { style: { fontSize: '11px', color: 'var(--accent)', marginLeft: 'auto' } }, '✅ Configurado') : null,
+      ),
+      h('div', { className: 'client-id-input', style: { marginBottom: '0' } },
+        h('input', {
+          type: 'text',
+          placeholder: 'Azure Application (client) ID',
+          value: state.msClientId,
+          onInput: (e) => { state.msClientId = e.target.value; },
+          id: 'msClientIdInput',
+        }),
+      ),
     ),
+
+    h('div', { style: { fontSize: '12px', color: 'var(--text3)', marginBottom: '16px', textAlign: 'center' } },
+      'Puedes configurar uno o ambos. Los que no uses déjalos vacíos.'
+    ),
+
+    h('button', {
+      className: 'btn btn-primary',
+      onClick: () => {
+        if (state.clientId.trim()) localStorage.setItem('gt_clientId', state.clientId.trim());
+        if (state.msClientId.trim()) localStorage.setItem('gt_msClientId', state.msClientId.trim());
+        if (state.clientId.trim() || state.msClientId.trim()) {
+          setState({ view: 'dashboard' });
+        }
+      },
+    }, '→ Continuar'),
+
     h('button', {
       className: 'btn btn-ghost',
       onClick: () => setState({ view: 'dashboard' }),
-      style: { fontSize: '12px' },
+      style: { fontSize: '12px', marginTop: '10px' },
     }, 'Saltar — usar solo modo manual'),
   );
   app.appendChild(screen);
@@ -1308,11 +1435,11 @@ function renderHeader(app) {
     h('div', { className: 'header-actions' },
       h('button', {
         className: 'scan-btn',
-        onClick: scanGmail,
+        onClick: scanAll,
         disabled: state.scanning,
       },
         state.scanning ? h('span', { className: 'spinner' }, '↻') : '📧',
-        state.scanning ? 'Escaneando...' : 'Escanear Gmail'
+        state.scanning ? 'Escaneando...' : 'Escanear correos'
       )
     )
   );
@@ -1783,6 +1910,7 @@ render();
 
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js" async defer></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

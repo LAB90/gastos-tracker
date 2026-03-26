@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gastos-tracker-v1';
+const CACHE_NAME = 'gastos-tracker-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -23,8 +23,8 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Don't cache Gmail API calls or Google auth
-  if (event.request.url.includes('googleapis.com') || event.request.url.includes('accounts.google.com')) {
+  // Don't cache Gmail API, Microsoft Graph, or auth calls
+  if (event.request.url.includes('googleapis.com') || event.request.url.includes('accounts.google.com') || event.request.url.includes('graph.microsoft.com') || event.request.url.includes('login.microsoftonline.com') || event.request.url.includes('msauth.net')) {
     return;
   }
   event.respondWith(
