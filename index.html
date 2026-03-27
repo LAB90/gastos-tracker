@@ -1003,7 +1003,7 @@ async function scanOutlook() {
           if (existingKeys.has(msg.id)) continue;
           const bodyText = msg.body?.contentType === 'html' ? htmlToText(msg.body.content) : (msg.body?.content || '');
           const tx = parseTransaction(bodyText, msg.subject, msg.receivedDateTime, msg.id, msg.id, queryType);
-          if (tx) newTxs.push(tx);
+          if (tx) { tx.mailProvider = 'outlook'; newTxs.push(tx); }
         }
       } catch (e) { /* continue */ }
     }
@@ -1098,15 +1098,28 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
 
   // ─── PRODUBANCO: CONSUMO ───
   // Format: Valor: USD 20.74 | Establecimiento: Amazon.com | Tarjeta MasterCard Produbanco XXX0314
+  // Subject: "Consumo Tarjeta de Crédito por USD 2,133.88"
   else if (queryType === 'consumo_produbanco') {
-    // Amount: "Valor: USD 20.74" or from subject "por USD 20.74"
-    const amtMatch = text.match(/Valor:\s*USD\s*([\d]+[.,]\d{2})/i) || subject.match(/por\s+USD\s*([\d]+[.,]\d{2})/i);
-    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    // Amount: handle formats like "USD 2,133.88", "USD 20.74", "USD 2.133,88"
+    const amtMatch = text.match(/Valor:\s*USD\s*([\d,\.]+)/i) || subject.match(/por\s+USD\s*([\d,\.]+)/i);
+    if (amtMatch) {
+      let raw = amtMatch[1];
+      // Determine format: if last separator is comma and 2 digits after → comma decimal (2.133,88)
+      // If last separator is period and 2 digits after → period decimal (2,133.88)
+      if (raw.match(/,\d{2}$/) && raw.includes('.')) { raw = raw.replace(/\./g, '').replace(',', '.'); }
+      else { raw = raw.replace(/,/g, ''); }
+      amount = parseFloat(raw);
+    }
     // Commerce: "Establecimiento: Amazon.com"
     const estMatch = text.match(/Establecimiento:\s*([^\n\r]+?)(?:\s*Si no|\s*$)/i);
     if (estMatch) description = estMatch[1].trim();
+    // If description is empty or too generic, try from subject
+    if (!description || description.length < 2) {
+      const subjMatch = subject.match(/Consumo Tarjeta de Cr[eé]dito por USD/i);
+      if (subjMatch) description = 'Consumo Produbanco';
+    }
     // Card: "MasterCard Produbanco XXX0314"
-    const cardMatch = text.match(/(?:MasterCard|Visa)\s+Produbanco\s+([\w]+)/i);
+    const cardMatch = text.match(/(?:MasterCard|Visa)\s+Produbanco\s+([\w]+)/i) || text.match(/Tarjeta de Cr[eé]dito\s+(?:MasterCard|Visa)?\s*Produbanco\s+([\w]+)/i);
     if (cardMatch) card = 'Produbanco ' + cardMatch[1];
     // Date: "Fecha y Hora: 03/20/2026 09:07"
     const dateMatch = text.match(/Fecha y Hora:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}:\d{2})/i);
@@ -1117,9 +1130,14 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
   // ─── PRODUBANCO: TRANSFERENCIA ───
   // Format: Beneficiario: ORTIZ REYES ANA BELEN | Monto: $3150.31 | Fecha y Hora: 10/Marzo/2026 9:57
   else if (queryType === 'transferencia_produbanco') {
-    // Amount: "Monto: $3150.31"
-    const amtMatch = text.match(/Monto:\s*\$\s*([\d]+[.,]\d{2})/i) || text.match(/Monto:\s*USD\s*([\d]+[.,]\d{2})/i);
-    if (amtMatch) amount = parseFloat(amtMatch[1].replace(',', '.'));
+    // Amount: "Monto: $3150.31" or "Monto: $3,150.31"
+    const amtMatch = text.match(/Monto:\s*\$\s*([\d,\.]+)/i) || text.match(/Monto:\s*USD\s*([\d,\.]+)/i);
+    if (amtMatch) {
+      let raw = amtMatch[1];
+      if (raw.match(/,\d{2}$/) && raw.includes('.')) { raw = raw.replace(/\./g, '').replace(',', '.'); }
+      else { raw = raw.replace(/,/g, ''); }
+      amount = parseFloat(raw);
+    }
     // Beneficiary: "Beneficiario: ORTIZ REYES ANA BELEN"
     const benMatch = text.match(/Beneficiario:\s*([^\n\r]+?)(?:\s*Banco|\s*Cuenta|\s*$)/i);
     if (benMatch) description = benMatch[1].trim();
@@ -1241,12 +1259,12 @@ function assignCategory(catId) {
   const tx = uncat[state.catIndex];
   const descLower = tx.description.toLowerCase();
 
-  // Animate the card sliding out
-  const card = document.querySelector('.categorize-card');
-  if (card) {
-    card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-    card.style.transform = 'translateX(-120%)';
-    card.style.opacity = '0';
+  // Animate the entire categorize wrap sliding out
+  const wrap = document.querySelector('.categorize-wrap');
+  if (wrap) {
+    wrap.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+    wrap.style.transform = 'translateX(-120%)';
+    wrap.style.opacity = '0';
   }
 
   setTimeout(() => {
@@ -1269,17 +1287,19 @@ function assignCategory(catId) {
       catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
     });
 
-    // Animate the new card sliding in
+    // Animate the new wrap sliding in
     requestAnimationFrame(() => {
-      const newCard = document.querySelector('.categorize-card');
-      if (newCard) {
-        newCard.style.transform = 'translateX(120%)';
-        newCard.style.opacity = '0';
-        newCard.style.transition = 'none';
+      const newWrap = document.querySelector('.categorize-wrap');
+      if (newWrap) {
+        newWrap.style.transform = 'translateX(120%)';
+        newWrap.style.opacity = '0';
+        newWrap.style.transition = 'none';
         requestAnimationFrame(() => {
-          newCard.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-          newCard.style.transform = 'translateX(0)';
-          newCard.style.opacity = '1';
+          newWrap.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+          newWrap.style.transform = 'translateX(0)';
+          newWrap.style.opacity = '1';
+          // Scroll to top so user sees the new expense
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         });
       }
     });
@@ -1649,7 +1669,7 @@ function renderTransactions(content) {
         ),
         h('div', { className: 'tx-actions', style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '0' } },
           tx.emailId ? h('a', {
-            href: `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+            href: tx.mailProvider === 'outlook' ? `https://outlook.live.com/mail/0/inbox/id/${tx.emailId}` : `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
             target: '_blank',
             title: 'Ver correo original',
             style: {
@@ -1731,7 +1751,7 @@ function renderCategorize(content) {
         `${fmtDate(tx.date)} · ${fmtTime(tx.date)}${tx.card ? ' · ' + tx.card : ''}${tx.type ? ' · ' + tx.type : ''}`
       ),
       tx.emailId ? h('a', {
-        href: `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+        href: tx.mailProvider === 'outlook' ? `https://outlook.live.com/mail/0/inbox/id/${tx.emailId}` : `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
         target: '_blank',
         style: {
           display: 'inline-flex',
