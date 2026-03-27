@@ -1298,8 +1298,9 @@ function assignCategory(catId) {
           newWrap.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
           newWrap.style.transform = 'translateX(0)';
           newWrap.style.opacity = '1';
-          // Scroll to top so user sees the new expense
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          // Scroll to the card so user sees the new expense
+          const card = document.querySelector('.categorize-card');
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
     });
