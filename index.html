@@ -1064,6 +1064,7 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
   let amount = null;
   let description = '';
   let card = '';
+  let note = '';
   let type = queryType || 'consumo';
   let txDate = date;
 
@@ -1088,6 +1089,8 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
     if (benMatch) description = benMatch[1].trim();
     const acctMatch = text.match(/Cuenta de origen:\s*([\w]+)/i);
     if (acctMatch) card = 'Pichincha ' + acctMatch[1];
+    const conceptMatch = text.match(/Concepto:\s*([^\n\r]+?)(?:\s*N[uú]mero|\s*Si no|\s*$)/i);
+    if (conceptMatch && conceptMatch[1].trim().length > 0) note = conceptMatch[1].trim();
     const dateMatch = text.match(/Fecha:\s*(\d{2}\/\d{2}\/\d{4})/i);
     if (dateMatch) {
       const parts = dateMatch[1].split('/');
@@ -1144,6 +1147,8 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
     // Account: "Cuenta Beneficiario: XXX90497"
     const acctMatch = text.match(/Cuenta Beneficiario:\s*([\w]+)/i);
     if (acctMatch) card = 'Produbanco → ' + acctMatch[1];
+    const descMatch = text.match(/Descripci[oó]n:\s*([^\n\r]+?)(?:\s*Canal:|\s*Referencia:|\s*Por seguridad|\s*$)/i);
+    if (descMatch && descMatch[1].trim().length > 0 && !/^transferencia local$/i.test(descMatch[1].trim())) note = descMatch[1].trim();
     // Date: "Fecha y Hora: 10/Marzo/2026 9:57"
     const months = {enero:'01',febrero:'02',marzo:'03',abril:'04',mayo:'05',junio:'06',julio:'07',agosto:'08',septiembre:'09',octubre:'10',noviembre:'11',diciembre:'12'};
     const dateMatch = text.match(/Fecha y Hora:\s*(\d{1,2})\/(\w+)\/(\d{4})\s+(\d{1,2}:\d{2})/i);
@@ -1175,6 +1180,7 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
     card,
     date: txDate,
     type,
+    note: note || '',
     source: 'gmail',
     categoryId: catId,
     categorized: !!catId,
