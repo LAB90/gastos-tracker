@@ -1278,10 +1278,10 @@ function assignCategory(catId) {
     catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
   });
 
-  // Scroll to the card so user sees the new expense
+  // Scroll to top of page so user sees the new expense
   requestAnimationFrame(() => {
-    const card = document.querySelector('.categorize-card');
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+    document.body.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
 
