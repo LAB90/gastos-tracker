@@ -1259,52 +1259,30 @@ function assignCategory(catId) {
   const tx = uncat[state.catIndex];
   const descLower = tx.description.toLowerCase();
 
-  // Animate the entire categorize wrap sliding out
-  const wrap = document.querySelector('.categorize-wrap');
-  if (wrap) {
-    wrap.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-    wrap.style.transform = 'translateX(-120%)';
-    wrap.style.opacity = '0';
-  }
+  // Learn the rule
+  const newRules = { ...state.learnedRules, [descLower]: catId };
 
-  setTimeout(() => {
-    // Learn the rule
-    const newRules = { ...state.learnedRules, [descLower]: catId };
+  // Apply to all matching uncategorized
+  const updated = state.transactions.map(t => {
+    if (t.id === tx.id) return { ...t, categoryId: catId, categorized: true };
+    if (!t.categorized && t.description.toLowerCase() === descLower) {
+      return { ...t, categoryId: catId, categorized: true };
+    }
+    return t;
+  });
 
-    // Apply to all matching uncategorized
-    const updated = state.transactions.map(t => {
-      if (t.id === tx.id) return { ...t, categoryId: catId, categorized: true };
-      if (!t.categorized && t.description.toLowerCase() === descLower) {
-        return { ...t, categoryId: catId, categorized: true };
-      }
-      return t;
-    });
+  const newUncat = updated.filter(t => !t.categorized).length;
+  setState({
+    transactions: updated,
+    learnedRules: newRules,
+    catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
+  });
 
-    const newUncat = updated.filter(t => !t.categorized).length;
-    setState({
-      transactions: updated,
-      learnedRules: newRules,
-      catIndex: Math.min(state.catIndex, Math.max(0, newUncat - 1)),
-    });
-
-    // Animate the new wrap sliding in
-    requestAnimationFrame(() => {
-      const newWrap = document.querySelector('.categorize-wrap');
-      if (newWrap) {
-        newWrap.style.transform = 'translateX(120%)';
-        newWrap.style.opacity = '0';
-        newWrap.style.transition = 'none';
-        requestAnimationFrame(() => {
-          newWrap.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-          newWrap.style.transform = 'translateX(0)';
-          newWrap.style.opacity = '1';
-          // Scroll to the card so user sees the new expense
-          const card = document.querySelector('.categorize-card');
-          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      }
-    });
-  }, 300);
+  // Scroll to the card so user sees the new expense
+  requestAnimationFrame(() => {
+    const card = document.querySelector('.categorize-card');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 // ─── HELPERS ─────────────────────────────────────────
