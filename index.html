@@ -1296,6 +1296,24 @@ function fmt$(n) { return new Intl.NumberFormat('en-US', { style: 'currency', cu
 function fmtDate(d) { return new Date(d).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' }); }
 function fmtTime(d) { return new Date(d).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }); }
 function getCat(id) { return CATEGORIES.find(c => c.id === id); }
+function emailUrl(tx) {
+  if (tx.mailProvider === 'outlook') {
+    // For Outlook, search by description and amount
+    const q = encodeURIComponent(tx.description + ' ' + tx.amount);
+    return `https://outlook.live.com/mail/0/search?q=${q}`;
+  }
+  // For Gmail, search by sender + date + amount
+  const d = new Date(tx.date);
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  const nextDay = new Date(d); nextDay.setDate(nextDay.getDate() + 1);
+  const nextStr = `${nextDay.getFullYear()}/${String(nextDay.getMonth()+1).padStart(2,'0')}/${String(nextDay.getDate()).padStart(2,'0')}`;
+  let sender = '';
+  if ((tx.card || '').includes('Produbanco')) sender = 'bancaenlinea@produbanco.com';
+  else if (tx.type === 'transferencia') sender = 'banco@pichincha.com';
+  else sender = 'servicios@tarjetasbancopichincha.com';
+  const q = `from:${sender} after:${dateStr} before:${nextStr} ${tx.amount}`;
+  return `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(q)}`;
+}
 function bankLogo(tx) {
   const qtype = tx.source === 'manual' ? '' : (tx.card || '');
   const isProdubanco = qtype.toLowerCase().includes('produbanco');
@@ -1654,7 +1672,7 @@ function renderTransactions(content) {
         ),
         h('div', { className: 'tx-actions', style: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '0' } },
           tx.emailId ? h('a', {
-            href: tx.mailProvider === 'outlook' ? `https://outlook.live.com/mail/0/inbox/id/${tx.emailId}` : `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+            href: emailUrl(tx),
             target: '_blank',
             title: 'Ver correo original',
             style: {
@@ -1736,7 +1754,7 @@ function renderCategorize(content) {
         `${fmtDate(tx.date)} · ${fmtTime(tx.date)}${tx.card ? ' · ' + tx.card : ''}${tx.type ? ' · ' + tx.type : ''}`
       ),
       tx.emailId ? h('a', {
-        href: tx.mailProvider === 'outlook' ? `https://outlook.live.com/mail/0/inbox/id/${tx.emailId}` : `https://mail.google.com/mail/u/0/#all/${tx.emailId}`,
+        href: emailUrl(tx),
         target: '_blank',
         style: {
           display: 'inline-flex',
