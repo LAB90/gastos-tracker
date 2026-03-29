@@ -1300,6 +1300,11 @@ function emailUrl(tx) {
   if (tx.mailProvider === 'outlook') {
     return `https://outlook.live.com/mail/0/inbox/id/${tx.emailId}`;
   }
+  // On iOS, open Gmail app directly; on desktop, use web
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    return `googlegmail:///co?threadid=${tx.threadId || tx.emailId}`;
+  }
   return `https://mail.google.com/mail/u/0/#inbox/${tx.threadId || tx.emailId}`;
 }
 function bankLogo(tx) {
