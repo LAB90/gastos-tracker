@@ -843,7 +843,7 @@ async function scanGmail() {
     // Helper to fetch and process messages
     async function fetchAndProcess(query, queryType, maxResults) {
       const res = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 50}`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 500}`,
         { headers: { Authorization: `Bearer ${state.accessToken}` } }
       );
       if (res.status === 401) { state.accessToken = null; initGoogleAuth(); return; }
@@ -869,7 +869,7 @@ async function scanGmail() {
     // Helper for metadata-filtered search (for banco@pichincha.com)
     async function fetchWithMetaFilter(query, subjectFilter, queryType, maxResults) {
       const res = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 200}`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 500}`,
         { headers: { Authorization: `Bearer ${state.accessToken}` } }
       );
       const data = await res.json();
@@ -893,21 +893,23 @@ async function scanGmail() {
       }
     }
 
+    const yearStart = `${new Date().getFullYear()}/01/01`;
+
     // ─── PICHINCHA: CONSUMOS ───
     setState({ status: 'Buscando consumos Pichincha...' });
-    await fetchAndProcess('from:servicios@tarjetasbancopichincha.com subject:"Notificación de Consumos" newer_than:30d', 'consumo_pichincha');
+    await fetchAndProcess(`from:servicios@tarjetasbancopichincha.com subject:"Notificación de Consumos" after:${yearStart}`, 'consumo_pichincha');
 
     // ─── PICHINCHA: TRANSFERENCIAS ───
     setState({ status: `${newTxs.length} gastos. Transferencias Pichincha...` });
-    await fetchWithMetaFilter('from:banco@pichincha.com newer_than:30d', 'TRANSFERENCIA BANCA ELECTRONICA', 'transferencia_pichincha');
+    await fetchWithMetaFilter(`from:banco@pichincha.com after:${yearStart}`, 'TRANSFERENCIA BANCA ELECTRONICA', 'transferencia_pichincha');
 
     // ─── PRODUBANCO: CONSUMOS ───
     setState({ status: `${newTxs.length} gastos. Consumos Produbanco...` });
-    await fetchAndProcess('from:bancaenlinea@produbanco.com subject:"Consumo Tarjeta de Crédito" newer_than:30d', 'consumo_produbanco');
+    await fetchAndProcess(`from:bancaenlinea@produbanco.com subject:"Consumo Tarjeta de Crédito" after:${yearStart}`, 'consumo_produbanco');
 
     // ─── PRODUBANCO: TRANSFERENCIAS ───
     setState({ status: `${newTxs.length} gastos. Transferencias Produbanco...` });
-    await fetchAndProcess('from:bancaenlinea@produbanco.com subject:"Transferencia Ingresada" newer_than:30d', 'transferencia_produbanco');
+    await fetchAndProcess(`from:bancaenlinea@produbanco.com subject:"Transferencia Ingresada" after:${yearStart}`, 'transferencia_produbanco');
 
     if (newTxs.length > 0) {
       const updated = [...newTxs, ...state.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -990,10 +992,13 @@ async function scanOutlook() {
     const existingKeys = new Set(state.transactions.map(t => t.emailId));
     const newTxs = [];
 
+    const msYearStart = `${new Date().getFullYear()}-01-01T00:00:00Z`;
+
     async function searchMs(filter, queryType) {
       try {
+        const fullFilter = `${filter} and receivedDateTime ge ${msYearStart}`;
         const res = await fetch(
-          `https://graph.microsoft.com/v1.0/me/messages?$filter=${encodeURIComponent(filter)}&$top=50&$select=id,subject,body,receivedDateTime`,
+          `https://graph.microsoft.com/v1.0/me/messages?$filter=${encodeURIComponent(fullFilter)}&$top=500&$select=id,subject,body,receivedDateTime`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.status === 401) { state.msAccessToken = null; await initMicrosoftAuth(); return; }
