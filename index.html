@@ -910,6 +910,7 @@ async function scanGmail() {
     // ─── PRODUBANCO: TRANSFERENCIAS ───
     setState({ status: `${newTxs.length} gastos. Transferencias Produbanco...` });
     await fetchAndProcess(`from:bancaenlinea@produbanco.com subject:"Transferencia Ingresada" after:${yearStart}`, 'transferencia_produbanco');
+    await fetchAndProcess(`from:bancaenlinea@produbanco.com subject:"Transferencia enviada" after:${yearStart}`, 'transferencia_produbanco');
 
     if (newTxs.length > 0) {
       const updated = [...newTxs, ...state.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1017,7 +1018,7 @@ async function scanOutlook() {
     await searchMs("from/emailAddress/address eq 'bancaenlinea@produbanco.com' and contains(subject,'Consumo Tarjeta')", 'consumo_produbanco');
 
     setState({ status: `${newTxs.length} gastos. Transferencias Produbanco (Outlook)...` });
-    await searchMs("from/emailAddress/address eq 'bancaenlinea@produbanco.com' and contains(subject,'Transferencia Ingresada')", 'transferencia_produbanco');
+    await searchMs("from/emailAddress/address eq 'bancaenlinea@produbanco.com' and contains(subject,'Transferencia')", 'transferencia_produbanco');
 
     setState({ status: `${newTxs.length} gastos. Consumos Pichincha (Outlook)...` });
     await searchMs("from/emailAddress/address eq 'servicios@tarjetasbancopichincha.com' and contains(subject,'Notificación de Consumos')", 'consumo_pichincha');
@@ -1146,13 +1147,15 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
       else { raw = raw.replace(/,/g, ''); }
       amount = parseFloat(raw);
     }
-    // Beneficiary: "Beneficiario: ORTIZ REYES ANA BELEN"
-    const benMatch = text.match(/Beneficiario:\s*([^\n\r]+?)(?:\s*Banco|\s*Cuenta|\s*$)/i);
+    // Try Beneficiario (Ingresada) first, then Contacto (Enviada)
+    const benMatch = text.match(/Beneficiario:\s*([^\n\r]+?)(?:\s*Banco|\s*Cuenta|\s*$)/i)
+                  || text.match(/Contacto:\s*([^\n\r]+?)(?:\s*Banco|\s*Cuenta|\s*$)/i);
     if (benMatch) description = benMatch[1].trim();
-    // Account: "Cuenta Beneficiario: XXX90497"
-    const acctMatch = text.match(/Cuenta Beneficiario:\s*([\w]+)/i);
+    // Account: try both formats
+    const acctMatch = text.match(/Cuenta Beneficiario:\s*([\w]+)/i)
+                   || text.match(/Cuenta Contacto:\s*([\w]+)/i);
     if (acctMatch) card = 'Produbanco → ' + acctMatch[1];
-    const descMatch = text.match(/Descripci[oó]n:\s*([^\n\r]+?)(?:\s*Canal:|\s*Referencia:|\s*Por seguridad|\s*$)/i);
+    const descMatch = text.match(/Descripci[oó]n:\s*([^\n\r]+?)(?:\s*Canal:|\s*Referencia:|\s*Por seguridad|\s*Esta transacci|\s*$)/i);
     if (descMatch && descMatch[1].trim().length > 0 && !/^transferencia local$/i.test(descMatch[1].trim())) note = descMatch[1].trim();
     // Date: "Fecha y Hora: 10/Marzo/2026 9:57"
     const months = {enero:'01',febrero:'02',marzo:'03',abril:'04',mayo:'05',junio:'06',julio:'07',agosto:'08',septiembre:'09',octubre:'10',noviembre:'11',diciembre:'12'};
