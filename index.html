@@ -1531,12 +1531,11 @@ function renderDashboard(content) {
     }
   }
 
-  // Daily average & Transfer vs Card vs Cash — filtered by selected month
-  const monthDates = thisMonth.map(t => new Date(t.date)).sort((a, b) => a - b);
-  const firstDateMonth = monthDates.length > 0 ? monthDates[0] : new Date(selectedYear, selectedMonth, 1);
-  const lastDateMonth = monthDates.length > 0 ? monthDates[monthDates.length - 1] : new Date(selectedYear, selectedMonth + 1, 0);
-  const daysInRange = Math.max(1, Math.ceil((lastDateMonth - firstDateMonth) / (1000 * 60 * 60 * 24)) + 1);
-  const dailyAvg = thisMonth.length > 0 ? monthTotal / daysInRange : 0;
+  // Bank comparison & payment type — filtered by selected month
+  const pichinTotal = thisMonth.filter(t => (t.card || '').toLowerCase().includes('pichincha')).reduce((s, t) => s + t.amount, 0);
+  const produTotal = thisMonth.filter(t => (t.card || '').toLowerCase().includes('produbanco')).reduce((s, t) => s + t.amount, 0);
+  const otherBankTotal = monthTotal - pichinTotal - produTotal;
+  const maxBank = Math.max(pichinTotal, produTotal, otherBankTotal, 1);
 
   const transferTotal = thisMonth.filter(t => t.type === 'transferencia').reduce((s, t) => s + t.amount, 0);
   const cardTotal = thisMonth.filter(t => t.type === 'consumo').reduce((s, t) => s + t.amount, 0);
@@ -1545,9 +1544,30 @@ function renderDashboard(content) {
 
   const bottomCards = h('div', { className: 'stats-row' },
     h('div', { className: 'stat-card' },
-      h('div', { className: 'stat-label' }, 'Gasto diario promedio'),
-      h('div', { className: 'stat-value', style: { color: 'var(--orange)' } }, fmt$(dailyAvg)),
-      h('div', { className: 'stat-sub' }, `en ${daysInRange} día${daysInRange !== 1 ? 's' : ''}`),
+      h('div', { className: 'stat-label' }, 'Por banco'),
+      h('div', { style: { marginTop: '10px' } },
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, '🟡 Pichincha'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(pichinTotal)),
+        ),
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(pichinTotal / maxBank) * 100}%`, background: '#FFD100', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ),
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, '🟢 Produbanco'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(produTotal)),
+        ),
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: otherBankTotal > 0 ? '12px' : '0', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(produTotal / maxBank) * 100}%`, background: '#006B3F', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ),
+        otherBankTotal > 0 ? h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Otros / Manual'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(otherBankTotal)),
+        ) : null,
+        otherBankTotal > 0 ? h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(otherBankTotal / maxBank) * 100}%`, background: 'var(--text3)', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ) : null,
+      ),
     ),
     h('div', { className: 'stat-card' },
       h('div', { className: 'stat-label' }, 'Por tipo de pago'),
