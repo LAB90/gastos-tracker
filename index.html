@@ -1562,24 +1562,26 @@ function renderDashboard(content) {
     }
   }
 
-  // Daily average & Transfer vs Card
-  const sortedDates = txs.map(t => new Date(t.date)).sort((a, b) => a - b);
-  const firstDate = sortedDates.length > 0 ? sortedDates[0] : new Date();
-  const daysSinceFirst = Math.max(1, Math.ceil((new Date() - firstDate) / (1000 * 60 * 60 * 24)));
-  const dailyAvg = total / daysSinceFirst;
+  // Daily average & Transfer vs Card vs Cash — filtered by selected month
+  const monthDates = thisMonth.map(t => new Date(t.date)).sort((a, b) => a - b);
+  const firstDateMonth = monthDates.length > 0 ? monthDates[0] : new Date(selectedYear, selectedMonth, 1);
+  const lastDateMonth = monthDates.length > 0 ? monthDates[monthDates.length - 1] : new Date(selectedYear, selectedMonth + 1, 0);
+  const daysInRange = Math.max(1, Math.ceil((lastDateMonth - firstDateMonth) / (1000 * 60 * 60 * 24)) + 1);
+  const dailyAvg = thisMonth.length > 0 ? monthTotal / daysInRange : 0;
 
-  const transferTotal = txs.filter(t => t.type === 'transferencia').reduce((s, t) => s + t.amount, 0);
-  const cardTotal = txs.filter(t => t.type === 'consumo').reduce((s, t) => s + t.amount, 0);
-  const maxType = Math.max(transferTotal, cardTotal, 1);
+  const transferTotal = thisMonth.filter(t => t.type === 'transferencia').reduce((s, t) => s + t.amount, 0);
+  const cardTotal = thisMonth.filter(t => t.type === 'consumo').reduce((s, t) => s + t.amount, 0);
+  const cashTotal = thisMonth.filter(t => t.type === 'efectivo').reduce((s, t) => s + t.amount, 0);
+  const maxType = Math.max(transferTotal, cardTotal, cashTotal, 1);
 
   const bottomCards = h('div', { className: 'stats-row' },
     h('div', { className: 'stat-card' },
       h('div', { className: 'stat-label' }, 'Gasto diario promedio'),
       h('div', { className: 'stat-value', style: { color: 'var(--orange)' } }, fmt$(dailyAvg)),
-      h('div', { className: 'stat-sub' }, `en ${daysSinceFirst} día${daysSinceFirst !== 1 ? 's' : ''}`),
+      h('div', { className: 'stat-sub' }, `en ${daysInRange} día${daysInRange !== 1 ? 's' : ''}`),
     ),
     h('div', { className: 'stat-card' },
-      h('div', { className: 'stat-label' }, 'Transferencias vs Tarjeta'),
+      h('div', { className: 'stat-label' }, 'Por tipo de pago'),
       h('div', { style: { marginTop: '10px' } },
         h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
           h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Transferencias'),
@@ -1592,8 +1594,15 @@ function renderDashboard(content) {
           h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Tarjeta de crédito'),
           h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(cardTotal)),
         ),
-        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', overflow: 'hidden' } },
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden' } },
           h('div', { style: { height: '100%', width: `${(cardTotal / maxType) * 100}%`, background: 'var(--accent)', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ),
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Efectivo'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(cashTotal)),
+        ),
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(cashTotal / maxType) * 100}%`, background: 'var(--yellow)', borderRadius: '4px', transition: 'width 0.5s' } }),
         ),
       ),
     ),
@@ -1621,7 +1630,7 @@ function renderTransactions(content) {
         borderRadius: '10px', padding: '10px 14px', width: '100%', outline: 'none',
         boxSizing: 'border-box',
       },
-      onInput: function() { state.search = this.value; render(); },
+      onInput: function() { state.search = this.value; const pos = this.selectionStart; render(); const el = document.getElementById('tx-search'); if (el) { el.focus(); el.selectionStart = el.selectionEnd = pos; } },
       onFocus: function() { this.style.borderColor = 'var(--accent)'; },
       onBlur: function() { this.style.borderColor = 'var(--border)'; },
     }),
