@@ -1991,55 +1991,62 @@ function renderCharts(content) {
       const td = new Date(t.date);
       return td.getMonth() === m && td.getFullYear() === y;
     }).reduce((s, t) => s + t.amount, 0);
-    months.push({ label: monthNames[m] + ' ' + String(y).slice(2), total, month: m, year: y });
+    months.push({ label: monthNames[m], year: String(y).slice(2), total });
   }
 
   const maxVal = Math.max(...months.map(m => m.total), 1);
+  const chartHeight = 220;
 
   content.appendChild(h('div', { style: { fontSize: '18px', fontWeight: '700', color: 'var(--text)', marginBottom: '16px', textAlign: 'center' } }, 'Gastos últimos 12 meses'));
 
-  // Chart container
+  // Chart container with fixed height
   const chartWrap = h('div', { style: {
-    display: 'flex', alignItems: 'flex-end', gap: '4px', height: '250px',
-    padding: '16px 8px 0', background: 'var(--surface)', borderRadius: '16px',
-    border: '1px solid var(--border)', overflow: 'hidden',
+    background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)',
+    padding: '20px 12px 12px', overflow: 'hidden',
+  } });
+
+  // Bars area
+  const barsArea = h('div', { style: {
+    display: 'flex', alignItems: 'flex-end', gap: '6px', height: chartHeight + 'px',
   } });
 
   months.forEach(m => {
-    const pct = maxVal > 0 ? (m.total / maxVal) * 100 : 0;
-    const barHeight = Math.max(pct, 2);
+    const barH = maxVal > 0 ? Math.max((m.total / maxVal) * chartHeight, m.total > 0 ? 8 : 2) : 2;
 
-    const bar = h('div', { style: {
-      flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '0',
-    } },
+    const col = h('div', { style: { flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', minWidth: '0' } },
       m.total > 0 ? h('div', { style: {
-        fontSize: '8px', color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden',
-        textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
-      } }, '$' + Math.round(m.total)) : null,
+        fontSize: '10px', fontWeight: '600', color: 'var(--accent)', marginBottom: '4px',
+        whiteSpace: 'nowrap',
+      } }, '$' + (m.total >= 1000 ? (m.total / 1000).toFixed(1) + 'k' : Math.round(m.total))) : null,
       h('div', { style: {
-        width: '100%', height: `${barHeight}%`, minHeight: '2px',
+        width: '100%', maxWidth: '40px', height: barH + 'px',
         background: m.total > 0 ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
-        borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease',
+        borderRadius: '4px 4px 0 0',
       } }),
     );
-    chartWrap.appendChild(bar);
+    barsArea.appendChild(col);
   });
-  content.appendChild(chartWrap);
+  chartWrap.appendChild(barsArea);
 
   // X axis labels
-  const labels = h('div', { style: {
-    display: 'flex', gap: '4px', padding: '6px 8px 0',
+  const xAxis = h('div', { style: {
+    display: 'flex', gap: '6px', marginTop: '8px', borderTop: '1px solid var(--border)', paddingTop: '8px',
   } });
   months.forEach(m => {
-    labels.appendChild(h('div', { style: {
-      flex: '1', fontSize: '9px', color: 'var(--text3)', textAlign: 'center', minWidth: '0',
-    } }, m.label));
+    xAxis.appendChild(h('div', { style: {
+      flex: '1', textAlign: 'center', minWidth: '0',
+    } },
+      h('div', { style: { fontSize: '10px', fontWeight: '500', color: 'var(--text2)' } }, m.label),
+      h('div', { style: { fontSize: '8px', color: 'var(--text3)' } }, "'" + m.year),
+    ));
   });
-  content.appendChild(labels);
+  chartWrap.appendChild(xAxis);
+  content.appendChild(chartWrap);
 
   // Total summary
   const totalAll = months.reduce((s, m) => s + m.total, 0);
-  const avgMonth = totalAll / 12;
+  const monthsWithData = months.filter(m => m.total > 0).length || 1;
+  const avgMonth = totalAll / monthsWithData;
   content.appendChild(h('div', { className: 'stats-row', style: { marginTop: '20px' } },
     h('div', { className: 'stat-card' },
       h('div', { className: 'stat-label' }, 'Total 12 meses'),
