@@ -769,18 +769,21 @@ const AUTO_RULES = {
 
 // ─── STATE ───────────────────────────────────────────
 let state = {
-  view: 'setup',        // setup | dashboard | transactions | categorize
+  view: 'setup',        // setup | dashboard | transactions | categorize | charts
   clientId: localStorage.getItem('gt_clientId') || '',
   msClientId: localStorage.getItem('gt_msClientId') || '',
   accessToken: null,
   msAccessToken: null,
-  provider: localStorage.getItem('gt_provider') || '',  // 'google' | 'microsoft' | 'both'
+  provider: localStorage.getItem('gt_provider') || '',
   transactions: JSON.parse(localStorage.getItem('gt_transactions') || '[]'),
   learnedRules: JSON.parse(localStorage.getItem('gt_learnedRules') || '{}'),
   scanning: false,
   status: null,
   filter: 'all',
+  search: '',
   catIndex: 0,
+  dashMonth: new Date().getMonth(),
+  dashYear: new Date().getFullYear(),
 };
 
 // Check if we have a valid config
@@ -1107,14 +1110,12 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
 
   // ─── PRODUBANCO: CONSUMO ───
   // Format: Valor: USD 20.74 | Establecimiento: Amazon.com | Tarjeta MasterCard Produbanco XXX0314
-  // Subject: "Consumo Tarjeta de Crédito por USD 2,133.88"
+  // Subject: "Consumo Tarjeta de Crédito por USD 2,133.88" or "por EUR 45.97"
   else if (queryType === 'consumo_produbanco') {
-    // Amount: handle formats like "USD 2,133.88", "USD 20.74", "USD 2.133,88"
-    const amtMatch = text.match(/Valor:\s*USD\s*([\d,\.]+)/i) || subject.match(/por\s+USD\s*([\d,\.]+)/i);
+    // Amount: handle any currency (USD, EUR, etc) and formats like "2,133.88", "20.74", "2.133,88"
+    const amtMatch = text.match(/Valor:\s*(?:USD|EUR|[A-Z]{3})\s*([\d,\.]+)/i) || subject.match(/por\s+(?:USD|EUR|[A-Z]{3})\s*([\d,\.]+)/i);
     if (amtMatch) {
       let raw = amtMatch[1];
-      // Determine format: if last separator is comma and 2 digits after → comma decimal (2.133,88)
-      // If last separator is period and 2 digits after → period decimal (2,133.88)
       if (raw.match(/,\d{2}$/) && raw.includes('.')) { raw = raw.replace(/\./g, '').replace(',', '.'); }
       else { raw = raw.replace(/,/g, ''); }
       amount = parseFloat(raw);
@@ -1124,13 +1125,13 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
     if (estMatch) description = estMatch[1].trim();
     // If description is empty or too generic, try from subject
     if (!description || description.length < 2) {
-      const subjMatch = subject.match(/Consumo Tarjeta de Cr[eé]dito por USD/i);
+      const subjMatch = subject.match(/Consumo Tarjeta de Cr[eé]dito por\s+(?:USD|EUR|[A-Z]{3})/i);
       if (subjMatch) description = 'Consumo Produbanco';
     }
     // Card: "MasterCard Produbanco XXX0314"
     const cardMatch = text.match(/(?:MasterCard|Visa)\s+Produbanco\s+([\w]+)/i) || text.match(/Tarjeta de Cr[eé]dito\s+(?:MasterCard|Visa)?\s*Produbanco\s+([\w]+)/i);
     if (cardMatch) card = 'Produbanco ' + cardMatch[1];
-    // Date: "Fecha y Hora: 03/20/2026 09:07"
+    // Date: "Fecha y Hora: 03/20/2026 09:07" or "Fecha y Hora: 04/20/2026 02:29"
     const dateMatch = text.match(/Fecha y Hora:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}:\d{2})/i);
     if (dateMatch) txDate = new Date(`${dateMatch[3]}-${dateMatch[1]}-${dateMatch[2]}T${dateMatch[4].padStart(5,'0')}:00`).toISOString();
     type = 'consumo';
@@ -1358,6 +1359,7 @@ function render() {
     if (state.view === 'dashboard') renderDashboard(content);
     else if (state.view === 'transactions') renderTransactions(content);
     else if (state.view === 'categorize') renderCategorize(content);
+    else if (state.view === 'charts') renderCharts(content);
     app.appendChild(content);
   }
 
@@ -1449,8 +1451,8 @@ function renderHeader(app) {
       )
     ),
     h('div', { className: 'nav' },
-      ...['dashboard', 'transactions', 'categorize'].map(v => {
-        const labels = { dashboard: 'Dashboard', transactions: 'Gastos', categorize: 'Categorizar' };
+      ...['dashboard', 'transactions', 'categorize', 'charts'].map(v => {
+        const labels = { dashboard: 'Dashboard', transactions: 'Gastos', categorize: 'Categorizar', charts: 'Gráficos' };
         const btn = h('button', {
           className: 'nav-btn' + (state.view === v ? ' active' : ''),
           onClick: () => setState({ view: v, filter: 'all', catIndex: 0 }),
@@ -1478,30 +1480,59 @@ function renderHeader(app) {
 function renderDashboard(content) {
   const txs = state.transactions;
   const total = txs.reduce((s, t) => s + t.amount, 0);
-  const now = new Date();
+
+  // Month selector
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const selectedMonth = state.dashMonth;
+  const selectedYear = state.dashYear;
+
+  const monthNav = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '16px' } },
+    h('button', {
+      style: { fontSize: '20px', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', padding: '8px' },
+      onClick: () => {
+        let m = state.dashMonth - 1, y = state.dashYear;
+        if (m < 0) { m = 11; y--; }
+        setState({ dashMonth: m, dashYear: y });
+      },
+    }, '←'),
+    h('div', { style: { textAlign: 'center' } },
+      h('div', { style: { fontSize: '22px', fontWeight: '700', color: 'var(--text)' } }, monthNames[selectedMonth]),
+      h('div', { style: { fontSize: '13px', color: 'var(--text3)' } }, String(selectedYear)),
+    ),
+    h('button', {
+      style: { fontSize: '20px', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', padding: '8px' },
+      onClick: () => {
+        let m = state.dashMonth + 1, y = state.dashYear;
+        if (m > 11) { m = 0; y++; }
+        setState({ dashMonth: m, dashYear: y });
+      },
+    }, '→'),
+  );
+  content.appendChild(monthNav);
+
   const thisMonth = txs.filter(t => {
     const d = new Date(t.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
   });
   const monthTotal = thisMonth.reduce((s, t) => s + t.amount, 0);
-  const catCount = txs.filter(t => t.categorized).length;
+  const catCount = thisMonth.filter(t => t.categorized).length;
 
   // Stats
   const stats = h('div', { className: 'stats-row' },
     h('div', { className: 'stat-card' },
-      h('div', { className: 'stat-label' }, 'Total acumulado'),
-      h('div', { className: 'stat-value', style: { color: 'var(--accent)' } }, fmt$(total)),
-      h('div', { className: 'stat-sub' }, `${txs.length} transacciones`),
+      h('div', { className: 'stat-label' }, 'Total del mes'),
+      h('div', { className: 'stat-value', style: { color: 'var(--accent)' } }, fmt$(monthTotal)),
+      h('div', { className: 'stat-sub' }, `${thisMonth.length} transacciones`),
     ),
     h('div', { className: 'stat-card' },
-      h('div', { className: 'stat-label' }, 'Este mes'),
-      h('div', { className: 'stat-value', style: { color: 'var(--blue)' } }, fmt$(monthTotal)),
-      h('div', { className: 'stat-sub' }, `${thisMonth.length} gastos`),
+      h('div', { className: 'stat-label' }, 'Total acumulado'),
+      h('div', { className: 'stat-value', style: { color: 'var(--blue)' } }, fmt$(total)),
+      h('div', { className: 'stat-sub' }, `${txs.length} gastos`),
     ),
     h('div', { className: 'stat-card' },
       h('div', { className: 'stat-label' }, 'Categorizados'),
-      h('div', { className: 'stat-value', style: { color: 'var(--yellow)' } }, `${catCount}/${txs.length}`),
-      h('div', { className: 'stat-sub' }, txs.length ? `${Math.round((catCount / txs.length) * 100)}%` : '—'),
+      h('div', { className: 'stat-value', style: { color: 'var(--yellow)' } }, `${catCount}/${thisMonth.length}`),
+      h('div', { className: 'stat-sub' }, thisMonth.length ? `${Math.round((catCount / thisMonth.length) * 100)}%` : '—'),
     ),
   );
   content.appendChild(stats);
@@ -1515,7 +1546,7 @@ function renderDashboard(content) {
 
     if (catTotals.length > 0) {
       const bar = h('div', { className: 'cat-bar-wrap' },
-        h('div', { className: 'cat-bar-title' }, 'Distribución por Categoría (este mes)'),
+        h('div', { className: 'cat-bar-title' }, `Distribución por Categoría`),
         h('div', { className: 'cat-bar' },
           ...catTotals.map(c => h('div', { className: 'cat-bar-seg', style: { width: `${(c.total / monthTotal) * 100}%`, background: c.color } }))
         ),
@@ -1577,6 +1608,26 @@ function renderTransactions(content) {
   const txs = state.transactions;
   const uncat = txs.filter(t => !t.categorized);
 
+  // Search bar
+  const searchBar = h('div', { style: { marginBottom: '12px' } },
+    h('input', {
+      type: 'text',
+      placeholder: '🔍 Buscar por nombre, nota o monto...',
+      value: state.search,
+      id: 'tx-search',
+      style: {
+        fontFamily: 'var(--font)', fontSize: '13px', color: 'var(--text)',
+        background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+        borderRadius: '10px', padding: '10px 14px', width: '100%', outline: 'none',
+        boxSizing: 'border-box',
+      },
+      onInput: function() { state.search = this.value; render(); },
+      onFocus: function() { this.style.borderColor = 'var(--accent)'; },
+      onBlur: function() { this.style.borderColor = 'var(--border)'; },
+    }),
+  );
+  content.appendChild(searchBar);
+
   // Filters
   const filters = h('div', { className: 'filters' },
     h('button', {
@@ -1597,9 +1648,19 @@ function renderTransactions(content) {
   );
   content.appendChild(filters);
 
-  const filtered = state.filter === 'all' ? txs
+  let filtered = state.filter === 'all' ? txs
     : state.filter === 'uncategorized' ? uncat
     : txs.filter(t => t.categoryId === state.filter);
+
+  // Apply search
+  if (state.search.trim()) {
+    const q = state.search.trim().toLowerCase();
+    filtered = filtered.filter(t =>
+      (t.description || '').toLowerCase().includes(q) ||
+      (t.note || '').toLowerCase().includes(q) ||
+      String(t.amount).includes(q)
+    );
+  }
 
   if (filtered.length === 0) {
     content.appendChild(h('div', { className: 'empty' },
@@ -1915,6 +1976,82 @@ function renderCategorize(content) {
   content.appendChild(wrap);
 }
 
+function renderCharts(content) {
+  const txs = state.transactions;
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const now = new Date();
+
+  // Build last 12 months data
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    const total = txs.filter(t => {
+      const td = new Date(t.date);
+      return td.getMonth() === m && td.getFullYear() === y;
+    }).reduce((s, t) => s + t.amount, 0);
+    months.push({ label: monthNames[m] + ' ' + String(y).slice(2), total, month: m, year: y });
+  }
+
+  const maxVal = Math.max(...months.map(m => m.total), 1);
+
+  content.appendChild(h('div', { style: { fontSize: '18px', fontWeight: '700', color: 'var(--text)', marginBottom: '16px', textAlign: 'center' } }, 'Gastos últimos 12 meses'));
+
+  // Chart container
+  const chartWrap = h('div', { style: {
+    display: 'flex', alignItems: 'flex-end', gap: '4px', height: '250px',
+    padding: '16px 8px 0', background: 'var(--surface)', borderRadius: '16px',
+    border: '1px solid var(--border)', overflow: 'hidden',
+  } });
+
+  months.forEach(m => {
+    const pct = maxVal > 0 ? (m.total / maxVal) * 100 : 0;
+    const barHeight = Math.max(pct, 2);
+
+    const bar = h('div', { style: {
+      flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '0',
+    } },
+      m.total > 0 ? h('div', { style: {
+        fontSize: '8px', color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden',
+        textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
+      } }, '$' + Math.round(m.total)) : null,
+      h('div', { style: {
+        width: '100%', height: `${barHeight}%`, minHeight: '2px',
+        background: m.total > 0 ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
+        borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease',
+      } }),
+    );
+    chartWrap.appendChild(bar);
+  });
+  content.appendChild(chartWrap);
+
+  // X axis labels
+  const labels = h('div', { style: {
+    display: 'flex', gap: '4px', padding: '6px 8px 0',
+  } });
+  months.forEach(m => {
+    labels.appendChild(h('div', { style: {
+      flex: '1', fontSize: '9px', color: 'var(--text3)', textAlign: 'center', minWidth: '0',
+    } }, m.label));
+  });
+  content.appendChild(labels);
+
+  // Total summary
+  const totalAll = months.reduce((s, m) => s + m.total, 0);
+  const avgMonth = totalAll / 12;
+  content.appendChild(h('div', { className: 'stats-row', style: { marginTop: '20px' } },
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Total 12 meses'),
+      h('div', { className: 'stat-value', style: { color: 'var(--accent)' } }, fmt$(totalAll)),
+    ),
+    h('div', { className: 'stat-card' },
+      h('div', { className: 'stat-label' }, 'Promedio mensual'),
+      h('div', { className: 'stat-value', style: { color: 'var(--blue)' } }, fmt$(avgMonth)),
+    ),
+  ));
+}
+
 function renderManualEntry(content) {
   const wrap = h('div', { className: 'manual-wrap' },
     h('div', { className: 'manual-title' }, '➕ Agregar gasto manual'),
@@ -1926,6 +2063,7 @@ function renderManualEntry(content) {
       h('select', { id: 'manual-type' },
         h('option', { value: 'consumo' }, 'Consumo tarjeta'),
         h('option', { value: 'transferencia' }, 'Transferencia'),
+        h('option', { value: 'efectivo' }, 'Efectivo'),
       ),
       h('button', { className: 'btn btn-primary', style: { padding: '10px 20px' }, onClick: addManualTx }, 'Agregar'),
     ),
