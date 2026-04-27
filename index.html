@@ -759,6 +759,7 @@ let state = {
   status: null,
   filter: 'all',
   search: '',
+  userName: localStorage.getItem('gt_userName') || '',
   catIndex: 0,
   dashMonth: new Date().getMonth(),
   dashYear: new Date().getFullYear(),
@@ -893,6 +894,10 @@ async function scanGmail() {
     await fetchAndProcess(`from:bancaenlinea@produbanco.com subject:"Transferencia Ingresada" after:${yearStart}`, 'transferencia_produbanco');
     await fetchAndProcess(`from:bancaenlinea@produbanco.com subject:"Transferencia enviada" after:${yearStart}`, 'transferencia_produbanco');
 
+    // ─── DINERS CLUB: CONSUMOS ───
+    setState({ status: `${newTxs.length} gastos. Consumos Diners Club...` });
+    await fetchAndProcess(`from:servicios@dinersclub.com.ec subject:"Notificación de Consumos" after:${yearStart}`, 'consumo_diners');
+
     if (newTxs.length > 0) {
       const updated = [...newTxs, ...state.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
       setState({
@@ -1006,6 +1011,10 @@ async function scanOutlook() {
 
     setState({ status: `${newTxs.length} gastos. Transferencias Pichincha (Outlook)...` });
     await searchMs("from/emailAddress/address eq 'banco@pichincha.com' and contains(subject,'TRANSFERENCIA BANCA ELECTRONICA')", 'transferencia_pichincha');
+
+    // Diners Club consumos
+    setState({ status: `${newTxs.length} gastos. Consumos Diners (Outlook)...` });
+    await searchMs("from/emailAddress/address eq 'servicios@dinersclub.com.ec' and contains(subject,'Notificación de Consumos')", 'consumo_diners');
 
     if (newTxs.length > 0) {
       const updated = [...newTxs, ...state.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1152,6 +1161,31 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
     type = 'transferencia';
   }
 
+  // ─── DINERS CLUB: CONSUMO ───
+  // Format: Tarjeta terminada en 708, Fecha 2026-04-26 09:02, Establecimiento PMZ - TICKETSHOW, Valor 95,18
+  else if (queryType === 'consumo_diners') {
+    // Amount: "Valor 95,18" (comma as decimal)
+    const amtMatch = text.match(/Valor\s*([\d,\.]+)/i);
+    if (amtMatch) {
+      let raw = amtMatch[1];
+      // Diners uses comma as decimal: 95,18 → 95.18
+      if (raw.match(/,\d{2}$/) && !raw.includes('.')) { raw = raw.replace(',', '.'); }
+      else if (raw.match(/,\d{2}$/) && raw.includes('.')) { raw = raw.replace(/\./g, '').replace(',', '.'); }
+      else { raw = raw.replace(/,/g, ''); }
+      amount = parseFloat(raw);
+    }
+    // Commerce: "Establecimiento PMZ - TICKETSHOW"
+    const estMatch = text.match(/Establecimiento\s+([^\n\r]+?)(?:\s*Valor|\s*$)/i);
+    if (estMatch) description = estMatch[1].trim();
+    // Card: "Tarjeta terminada en 708"
+    const cardMatch = text.match(/Tarjeta terminada en\s+(\d+)/i);
+    if (cardMatch) card = 'Diners ****' + cardMatch[1];
+    // Date: "Fecha 2026-04-26 09:02"
+    const dateMatch = text.match(/Fecha\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/i);
+    if (dateMatch) txDate = new Date(dateMatch[1].replace(' ', 'T') + ':00').toISOString();
+    type = 'consumo';
+  }
+
   // ─── FALLBACK ───
   else {
     const amtMatch = text.match(/\$\s*([\d]+[.,]\d{2})/) || text.match(/USD\s*([\d]+[.,]\d{2})/i);
@@ -1161,6 +1195,21 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
 
   if (!amount || amount <= 0) return null;
   if (!description) description = 'Transacción bancaria';
+
+  // Skip transfers to own accounts
+  if (type === 'transferencia' && state.userName.trim()) {
+    const userName = state.userName.trim().toLowerCase();
+    const descLower = description.toLowerCase();
+    // Compare using words — if all words of the user's name appear in the beneficiary
+    const nameWords = userName.split(/\s+/).filter(w => w.length > 2);
+    const matchCount = nameWords.filter(w => descLower.includes(w)).length;
+    // If most name words match (at least 2 and >= 60% of words), consider it a self-transfer
+    if (nameWords.length >= 2 && matchCount >= Math.ceil(nameWords.length * 0.6)) return null;
+    // Also check if beneficiary words appear in user name
+    const descWords = descLower.split(/\s+/).filter(w => w.length > 2);
+    const reverseMatch = descWords.filter(w => userName.includes(w)).length;
+    if (descWords.length >= 2 && reverseMatch >= Math.ceil(descWords.length * 0.6)) return null;
+  }
 
   const catId = autoCategory(description);
 
@@ -1300,8 +1349,10 @@ function bankLogo(tx) {
   const qtype = tx.source === 'manual' ? '' : (tx.card || '');
   const isProdubanco = qtype.toLowerCase().includes('produbanco');
   const isPichincha = qtype.toLowerCase().includes('pichincha');
+  const isDiners = qtype.toLowerCase().includes('diners');
   if (isProdubanco) return h('span', { style: { display: 'inline-block', width: '18px', height: '18px', borderRadius: '4px', background: '#006B3F', color: '#fff', fontSize: '10px', fontWeight: '700', textAlign: 'center', lineHeight: '18px', flexShrink: '0', marginRight: '6px' } }, 'P');
   if (isPichincha) return h('span', { style: { display: 'inline-block', width: '18px', height: '18px', borderRadius: '4px', background: '#FFD100', color: '#003B7A', fontSize: '10px', fontWeight: '700', textAlign: 'center', lineHeight: '18px', flexShrink: '0', marginRight: '6px' } }, 'B');
+  if (isDiners) return h('span', { style: { display: 'inline-block', width: '18px', height: '18px', borderRadius: '4px', background: '#1A3668', color: '#fff', fontSize: '10px', fontWeight: '700', textAlign: 'center', lineHeight: '18px', flexShrink: '0', marginRight: '6px' } }, 'D');
   return null;
 }
 function h(tag, attrs, ...children) {
@@ -1354,6 +1405,26 @@ function renderSetup(app) {
       'Conecta tu correo para escanear automáticamente las notificaciones de tus bancos y organizar tus gastos.'
     ),
 
+    // User name section
+    h('div', { className: 'setup-steps', style: { marginBottom: '16px' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' } },
+        h('div', { style: { width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent)', color: '#000', fontSize: '12px', fontWeight: '700', textAlign: 'center', lineHeight: '28px' } }, '👤'),
+        h('div', { style: { fontWeight: '600', fontSize: '15px', color: 'var(--text)' } }, 'Tu nombre'),
+      ),
+      h('div', { className: 'client-id-input', style: { marginBottom: '0' } },
+        h('input', {
+          type: 'text',
+          placeholder: 'Ej: BACA VASCONEZ LUIS ANTONIO',
+          value: state.userName,
+          onInput: (e) => { state.userName = e.target.value; },
+          id: 'userNameInput',
+        }),
+      ),
+      h('div', { style: { fontSize: '11px', color: 'var(--text3)', marginTop: '6px' } },
+        'Para identificar transferencias a tus propias cuentas y no contarlas como gasto.'
+      ),
+    ),
+
     // Gmail section
     h('div', { className: 'setup-steps', style: { marginBottom: '16px' } },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' } },
@@ -1397,6 +1468,7 @@ function renderSetup(app) {
     h('button', {
       className: 'btn btn-primary',
       onClick: () => {
+        if (state.userName.trim()) localStorage.setItem('gt_userName', state.userName.trim());
         if (state.clientId.trim()) localStorage.setItem('gt_clientId', state.clientId.trim());
         if (state.msClientId.trim()) localStorage.setItem('gt_msClientId', state.msClientId.trim());
         if (state.clientId.trim() || state.msClientId.trim()) {
@@ -1422,7 +1494,7 @@ function renderHeader(app) {
       h('div', { className: 'header-icon' }, '💰'),
       h('div', null,
         h('div', { className: 'header-title' }, 'GastosTracker'),
-        h('div', { className: 'header-sub' }, 'Pichincha & Produbanco'),
+        h('div', { className: 'header-sub' }, 'Pichincha & Produbanco & Diners'),
       )
     ),
     h('div', { className: 'nav' },
@@ -1540,8 +1612,9 @@ function renderDashboard(content) {
   // Bank comparison & payment type — filtered by selected month
   const pichinTotal = thisMonth.filter(t => (t.card || '').toLowerCase().includes('pichincha')).reduce((s, t) => s + t.amount, 0);
   const produTotal = thisMonth.filter(t => (t.card || '').toLowerCase().includes('produbanco')).reduce((s, t) => s + t.amount, 0);
-  const otherBankTotal = monthTotal - pichinTotal - produTotal;
-  const maxBank = Math.max(pichinTotal, produTotal, otherBankTotal, 1);
+  const dinersTotal = thisMonth.filter(t => (t.card || '').toLowerCase().includes('diners')).reduce((s, t) => s + t.amount, 0);
+  const otherBankTotal = monthTotal - pichinTotal - produTotal - dinersTotal;
+  const maxBank = Math.max(pichinTotal, produTotal, dinersTotal, otherBankTotal, 1);
 
   const transferTotal = thisMonth.filter(t => t.type === 'transferencia').reduce((s, t) => s + t.amount, 0);
   const cardTotal = thisMonth.filter(t => t.type === 'consumo').reduce((s, t) => s + t.amount, 0);
@@ -1563,8 +1636,15 @@ function renderDashboard(content) {
           h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, '🟢 Produbanco'),
           h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(produTotal)),
         ),
-        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: otherBankTotal > 0 ? '12px' : '0', overflow: 'hidden' } },
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden' } },
           h('div', { style: { height: '100%', width: `${(produTotal / maxBank) * 100}%`, background: '#006B3F', borderRadius: '4px', transition: 'width 0.5s' } }),
+        ),
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+          h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, '🔵 Diners Club'),
+          h('span', { style: { fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: '600' } }, fmt$(dinersTotal)),
+        ),
+        h('div', { style: { height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: otherBankTotal > 0 ? '12px' : '0', overflow: 'hidden' } },
+          h('div', { style: { height: '100%', width: `${(dinersTotal / maxBank) * 100}%`, background: '#1A3668', borderRadius: '4px', transition: 'width 0.5s' } }),
         ),
         otherBankTotal > 0 ? h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
           h('span', { style: { fontSize: '12px', color: 'var(--text2)' } }, 'Otros / Manual'),
