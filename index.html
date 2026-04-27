@@ -1739,11 +1739,20 @@ function renderTransactions(content) {
   // Apply search
   if (state.search.trim()) {
     const q = state.search.trim().toLowerCase();
-    filtered = filtered.filter(t =>
-      (t.description || '').toLowerCase().includes(q) ||
-      (t.note || '').toLowerCase().includes(q) ||
-      String(t.amount).includes(q)
-    );
+    // Check if query matches a month name
+    const monthMap = { 'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5, 'julio': 6, 'agosto': 7, 'septiembre': 8, 'octubre': 9, 'noviembre': 10, 'diciembre': 11 };
+    const matchedMonth = Object.entries(monthMap).find(([name]) => name.startsWith(q));
+    if (matchedMonth) {
+      const monthNum = matchedMonth[1];
+      filtered = filtered.filter(t => new Date(t.date).getMonth() === monthNum);
+    } else {
+      filtered = filtered.filter(t =>
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.note || '').toLowerCase().includes(q) ||
+        String(t.amount).includes(q) ||
+        fmtDate(t.date).toLowerCase().includes(q)
+      );
+    }
   }
 
   if (filtered.length === 0) {
