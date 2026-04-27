@@ -1090,13 +1090,19 @@ function parseTransaction(body, subject, date, emailId, threadId, queryType) {
   // Format: Valor: USD 20.74 | Establecimiento: Amazon.com | Tarjeta MasterCard Produbanco XXX0314
   // Subject: "Consumo Tarjeta de Crédito por USD 2,133.88" or "por EUR 45.97"
   else if (queryType === 'consumo_produbanco') {
-    // Amount: handle any currency (USD, EUR, etc) and formats like "2,133.88", "20.74", "2.133,88"
+    // Detect currency
+    const currMatch = text.match(/Valor:\s*(USD|EUR|[A-Z]{3})/i) || subject.match(/por\s+(USD|EUR|[A-Z]{3})/i);
+    const currency = currMatch ? currMatch[1].toUpperCase() : 'USD';
+    // Amount: handle any currency and formats like "2,133.88", "20.74", "2.133,88"
     const amtMatch = text.match(/Valor:\s*(?:USD|EUR|[A-Z]{3})\s*([\d,\.]+)/i) || subject.match(/por\s+(?:USD|EUR|[A-Z]{3})\s*([\d,\.]+)/i);
     if (amtMatch) {
       let raw = amtMatch[1];
       if (raw.match(/,\d{2}$/) && raw.includes('.')) { raw = raw.replace(/\./g, '').replace(',', '.'); }
       else { raw = raw.replace(/,/g, ''); }
       amount = parseFloat(raw);
+      // Convert non-USD to USD
+      if (currency === 'EUR') amount = amount * 1.1;
+      else if (currency !== 'USD') amount = amount * 1.1; // default conversion for unknown currencies
     }
     // Commerce: "Establecimiento: Amazon.com"
     const estMatch = text.match(/Establecimiento:\s*([^\n\r]+?)(?:\s*Si no|\s*$)/i);
